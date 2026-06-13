@@ -3,10 +3,14 @@ import { View, Text, StyleSheet } from "react-native"
 import { router } from "expo-router"
 import { theme } from "../../src/theme/tokens"
 import { JourneyPath } from "../../src/components/JourneyPath"
+import { Button } from "../../src/components/Button"
+import { AiCompanion } from "../../src/components/AiCompanion"
 import { useTaskState } from "../../src/hooks/useTaskState"
+import { useOnboarding } from "../../src/hooks/useOnboarding"
 import { useCompanionPulse } from "../../src/hooks/useCompanionPulse"
 
 export default function Journey() {
+  const { userName } = useOnboarding()
   const {
     currentTask,
     currentStep,
@@ -15,7 +19,7 @@ export default function Journey() {
     hasActiveTask,
   } = useTaskState()
 
-  useCompanionPulse(currentStep?.estimated_minutes ?? null)
+  const { shouldPulse, clearPulse } = useCompanionPulse(currentStep?.estimated_minutes ?? null)
 
   const handleBeginStep = useCallback(() => {
     router.push("/focus-timer")
@@ -24,9 +28,22 @@ export default function Journey() {
   if (!hasActiveTask || !currentTask) {
     return (
       <View style={styles.emptyContainer}>
-        <Text style={styles.emptyText}>
-          No active task yet.{"\n"}Tell us what you want to work on.
-        </Text>
+        <Text style={styles.emptyText}>No active task yet.</Text>
+        <Button
+          title="Start a task"
+          onPress={() => router.push("/(tabs)/home")}
+          variant="primary"
+          style={styles.emptyButton}
+        />
+        <AiCompanion
+          context={{
+            userName: userName ?? "there",
+            completedSteps: 0,
+            totalSteps: 0,
+          }}
+          isVisible
+          shouldPulse={false}
+        />
       </View>
     )
   }
@@ -45,6 +62,19 @@ export default function Journey() {
         currentStepIndex={currentStepIndex}
         phases={phases}
         onBeginStep={handleBeginStep}
+      />
+      <AiCompanion
+        context={{
+          userName: userName ?? "there",
+          currentTask: currentTask.title,
+          currentStepTitle: currentStep?.title,
+          currentStepInstruction: currentStep?.instruction,
+          completedSteps: completedStepIds.length,
+          totalSteps: currentTask.steps.length,
+        }}
+        isVisible
+        shouldPulse={shouldPulse}
+        onPulseClear={clearPulse}
       />
     </View>
   )
@@ -68,7 +98,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: theme.spacing.xl,
+    paddingHorizontal: 24,
+    paddingVertical: theme.spacing.xl,
     backgroundColor: theme.colors.background,
   },
   emptyText: {
@@ -77,5 +108,9 @@ const styles = StyleSheet.create({
     color: theme.colors.onSurfaceVariant,
     textAlign: "center",
     lineHeight: theme.typography.body.large.lineHeight,
+    marginBottom: theme.spacing.lg,
+  },
+  emptyButton: {
+    minWidth: 160,
   },
 })

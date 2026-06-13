@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "StrydApp",
-    "slug": "StrydApp",
+"name": "Stryd",
+"slug": "Stryd",
     "scheme": "strydapp",
     "version": "1.0.0",
     "orientation": "portrait",

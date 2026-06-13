@@ -1,17 +1,21 @@
 import { Tabs } from "expo-router"
-import { Text, StyleSheet } from "react-native"
+import { StyleSheet } from "react-native"
 import { theme } from "../../src/theme/tokens"
+import { HomeIcon, PathIcon, SettingsIcon } from "../../src/components/icons"
 
-function TabIcon({ label, focused }: { label: string; focused: boolean }) {
-  const icons: Record<string, string> = {
-    Home: "🏠",
-    Journey: "🗺️",
-    Settings: "⚙️",
-  }
+function TabIcon({
+  icon: Icon,
+  focused,
+}: {
+  icon: typeof HomeIcon
+  focused: boolean
+}) {
   return (
-    <Text style={[styles.icon, focused && styles.iconFocused]}>
-      {icons[label] ?? "•"}
-    </Text>
+    <Icon
+      color={focused ? theme.colors.primary : theme.colors.onSurfaceVariant}
+      size={focused ? 24 : 22}
+
+    />
   )
 }
 
@@ -30,21 +34,21 @@ export default function TabsLayout() {
         name="home"
         options={{
           title: "Home",
-          tabBarIcon: ({ focused }) => <TabIcon label="Home" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon icon={HomeIcon} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="journey"
         options={{
           title: "Journey",
-          tabBarIcon: ({ focused }) => <TabIcon label="Journey" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon icon={PathIcon} focused={focused} />,
         }}
       />
       <Tabs.Screen
         name="settings"
         options={{
           title: "Settings",
-          tabBarIcon: ({ focused }) => <TabIcon label="Settings" focused={focused} />,
+          tabBarIcon: ({ focused }) => <TabIcon icon={SettingsIcon} focused={focused} />,
         }}
       />
     </Tabs>
@@ -65,10 +69,5 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.label.small.fontSize,
     fontWeight: theme.typography.weight.medium,
   },
-  icon: {
-    fontSize: 22,
-  },
-  iconFocused: {
-    fontSize: 24,
-  },
+
 })

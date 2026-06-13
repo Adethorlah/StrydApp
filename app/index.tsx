@@ -1,12 +1,15 @@
 import { useEffect, useState } from "react"
 import { View, Text, StyleSheet } from "react-native"
 import { Redirect } from "expo-router"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 import { getOnboardingComplete } from "../src/lib/storage"
 
 export default function Index() {
   const [route, setRoute] = useState<"onboarding" | "tabs" | null>(null)
 
   useEffect(() => {
+    AsyncStorage.removeItem("session_mood")
+
     getOnboardingComplete().then((complete) => {
       setRoute(complete ? "tabs" : "onboarding")
     })

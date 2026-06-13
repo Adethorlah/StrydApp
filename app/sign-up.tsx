@@ -9,7 +9,7 @@ import { useAuth } from "../src/hooks/useAuth"
 
 export default function SignUp() {
   const { userName } = useOnboarding()
-  const { signInWithGoogle, signUpWithEmail, signInWithEmail, migrateGuestData } = useAuth()
+  const { signInWithGoogle, signUpWithEmail, signInWithEmail, migrateWithUser } = useAuth()
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -20,15 +20,17 @@ export default function SignUp() {
   const handleGoogleSignUp = useCallback(async () => {
     try {
       setIsSubmitting(true)
-      await signInWithGoogle()
-      await migrateGuestData()
+      const user = await signInWithGoogle()
+      if (user) {
+        await migrateWithUser(user)
+      }
       router.back()
     } catch {
       // Silent failure
     } finally {
       setIsSubmitting(false)
     }
-  }, [signInWithGoogle, migrateGuestData])
+  }, [signInWithGoogle, migrateWithUser])
 
   const handleEmailSignUp = useCallback(async () => {
     if (!email.trim() || !password.trim()) return
@@ -36,14 +38,22 @@ export default function SignUp() {
       setIsSubmitting(true)
       setError("")
       await signUpWithEmail(email.trim(), password.trim())
-      await migrateGuestData()
-      router.back()
+
+      try {
+        const user = await signInWithEmail(email.trim(), password.trim())
+        if (user) {
+          await migrateWithUser(user)
+        }
+        router.back()
+      } catch {
+        setError("Check your email to confirm your account. Your data is saved locally until then.")
+      }
     } catch (e: any) {
       setError(e.message ?? "Something went wrong.")
     } finally {
       setIsSubmitting(false)
     }
-  }, [email, password, signUpWithEmail, migrateGuestData])
+  }, [email, password, signUpWithEmail, signInWithEmail, migrateWithUser])
 
   return (
     <KeyboardAvoidingView
@@ -116,7 +126,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: theme.spacing.xl,
+    paddingHorizontal: 24,
+    paddingVertical: theme.spacing.xl,
     backgroundColor: theme.colors.background,
   },
   companionMessage: {

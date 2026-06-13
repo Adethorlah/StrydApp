@@ -124,12 +124,28 @@ export async function migrateGuestDataToSupabase(
   }
 
   if (task && step) {
-    await supabaseClient
+    const { id: taskId, ...taskData } = task as any
+    const { data: newTask } = await supabaseClient
       .from("tasks")
-      .upsert({ ...task, user_id: userId })
-    await supabaseClient
-      .from("steps")
-      .upsert({ ...step, task_id: (task as any).id })
+      .insert({ ...taskData, user_id: userId })
+      .select("id")
+      .single()
+
+    if (newTask) {
+      const stepsToInsert = taskData.steps?.map((s: any) => ({
+        task_id: newTask.id,
+        step_order: s.step_order,
+        title: s.title,
+        instruction: s.instruction,
+        estimated_minutes: s.estimated_minutes,
+        phase: s.phase ?? 1,
+        is_completed: completedIds.includes(s.id ?? String(s.step_order)),
+      })) ?? []
+
+      if (stepsToInsert.length > 0) {
+        await supabaseClient.from("steps").insert(stepsToInsert)
+      }
+    }
   }
 
   await AsyncStorage.clear()

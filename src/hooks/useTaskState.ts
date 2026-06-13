@@ -8,27 +8,7 @@ import {
   getCompletedStepIds,
   addCompletedStepId,
 } from "../lib/storage"
-
-export interface Step {
-  step_order: number
-  title: string
-  instruction: string
-  estimated_minutes: number
-  phase?: number
-  is_completed?: boolean
-  is_active?: boolean
-  id?: string
-}
-
-export interface Task {
-  id?: string
-  title: string
-  steps: Step[]
-  is_multi_phase?: boolean
-  phases?: { phase_order: number; phase_label: string }[]
-  created_at?: string
-  is_completed?: boolean
-}
+import { Task, Step } from "../types"
 
 export function useTaskState() {
   const [currentTask, setCurrentTaskState] = useState<Task | null>(null)
@@ -41,8 +21,13 @@ export function useTaskState() {
       getCurrentStep(),
       getCompletedStepIds(),
     ]).then(([task, step, completed]) => {
-      if (task) setCurrentTaskState(task as Task)
-      if (step) setCurrentStepIndex((step as Step).step_order - 1)
+      if (task) {
+        setCurrentTaskState(task as Task)
+        if (step) {
+          const idx = (task as Task).steps.findIndex((s) => s.step_order === (step as Step).step_order)
+          setCurrentStepIndex(idx >= 0 ? idx : 0)
+        }
+      }
       setCompletedStepIdsState(completed)
     })
   }, [])

@@ -7,6 +7,10 @@ import { Session, User } from "@supabase/supabase-js"
 
 WebBrowser.maybeCompleteAuthSession()
 
+function stall(ms: number) {
+  return new Promise((r) => setTimeout(r, ms))
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
@@ -42,11 +46,29 @@ export function useAuth() {
     if (data?.url) {
       await WebBrowser.openAuthSessionAsync(data.url, "strydapp://auth/callback")
     }
+
+    // Poll for session after browser closes
+    for (let i = 0; i < 20; i++) {
+      const { data: { session } } = await supabase.auth.getSession()
+      if (session?.user) {
+        setUser(session.user)
+        setSession(session)
+        return session.user
+      }
+      await stall(300)
+    }
+    throw new Error("Session not established after sign in")
   }, [])
 
   const signInWithEmail = useCallback(async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
+    const user = data.session?.user ?? null
+    if (user) {
+      setUser(user)
+      setSession(data.session)
+    }
+    return user
   }, [])
 
   const signUpWithEmail = useCallback(async (email: string, password: string) => {
@@ -65,6 +87,11 @@ export function useAuth() {
     await getOrCreateProfile(user.id, user.email ?? undefined)
   }, [user])
 
+  const migrateWithUser = useCallback(async (u: User) => {
+    await migrateGuestDataToSupabase(u.id, supabase)
+    await getOrCreateProfile(u.id, u.email ?? undefined)
+  }, [])
+
   return {
     user,
     session,
@@ -75,5 +102,6 @@ export function useAuth() {
     signUpWithEmail,
     signOut,
     migrateGuestData,
+    migrateWithUser,
   }
 }

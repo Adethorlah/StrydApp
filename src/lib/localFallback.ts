@@ -1,15 +1,4 @@
-export interface FallbackStep {
-  step_order: number
-  title: string
-  instruction: string
-  estimated_minutes: number
-}
-
-export interface FallbackResult {
-  is_multi_phase: false
-  total_estimated_minutes: number
-  steps: FallbackStep[]
-}
+import { FallbackStep, FallbackResult } from "../types"
 
 export function generateLocalFallback(task_title: string): FallbackResult {
   return {

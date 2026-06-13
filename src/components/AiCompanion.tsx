@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react"
+import { useState, useRef, useCallback, useEffect } from "react"
 import {
   View,
   Text,
@@ -13,43 +13,35 @@ import {
 } from "react-native"
 import { theme } from "../theme/tokens"
 import { AiChatBubble } from "./AiChatBubble"
-import { callDeepseek } from "../lib/deepseek"
-
-interface CompanionContext {
-  userName: string
-  currentTask?: string
-  currentStepTitle?: string
-  currentStepInstruction?: string
-  moodScore?: number
-  completedSteps: number
-  totalSteps: number
-}
+import { useCompanionChat } from "../hooks/useCompanionChat"
+import { CompanionContext } from "../types"
 
 interface CompanionProps {
   context: CompanionContext
   isVisible: boolean
   shouldPulse: boolean
   onPulseClear?: () => void
+  startOpen?: boolean
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window")
 const PANEL_HEIGHT = SCREEN_HEIGHT * 0.65
 
-export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear }: CompanionProps) {
+export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear, startOpen }: CompanionProps) {
   const [isOpen, setIsOpen] = useState(false)
-  const [messages, setMessages] = useState<
-    { role: "user" | "assistant"; content: string }[]
-  >([])
   const [inputText, setInputText] = useState("")
-  const [isLoading, setIsLoading] = useState(false)
   const slideAnim = useRef(new Animated.Value(PANEL_HEIGHT)).current
   const pulseAnim = useRef(new Animated.Value(1)).current
   const inputRef = useRef<TextInput>(null)
-
   const hasSentIntro = useRef(false)
 
-  // Pulse animation
-  useState(() => {
+  const { messages, isLoading, sendMessage, initWithGreeting } = useCompanionChat(context)
+
+  useEffect(() => {
+    if (startOpen) openPanel()
+  }, [startOpen])
+
+  useEffect(() => {
     if (shouldPulse) {
       Animated.loop(
         Animated.sequence([
@@ -67,7 +59,7 @@ export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear }: C
         { iterations: 3 }
       ).start()
     }
-  })
+  }, [shouldPulse, pulseAnim])
 
   const openPanel = useCallback(() => {
     setIsOpen(true)
@@ -78,17 +70,12 @@ export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear }: C
     }).start()
 
     if (!hasSentIntro.current && context.userName) {
-      setMessages([
-        {
-          role: "assistant",
-          content: `Hey ${context.userName}, I'm here whenever you need me. Just tap here if you get stuck or want to talk through a step.`,
-        },
-      ])
+      initWithGreeting(context.userName)
       hasSentIntro.current = true
     }
 
     if (onPulseClear) onPulseClear()
-  }, [slideAnim, context.userName, onPulseClear])
+  }, [slideAnim, context.userName, onPulseClear, initWithGreeting])
 
   const closePanel = useCallback(() => {
     Animated.timing(slideAnim, {
@@ -98,55 +85,12 @@ export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear }: C
     }).start(() => setIsOpen(false))
   }, [slideAnim])
 
-  const sendMessage = useCallback(async () => {
+  const handleSend = useCallback(async () => {
     if (!inputText.trim() || isLoading) return
-
-    const userMessage = inputText.trim()
+    const message = inputText.trim()
     setInputText("")
-    setMessages((prev) => [...prev, { role: "user", content: userMessage }])
-    setIsLoading(true)
-
-    try {
-      const systemMessage = {
-        role: "system",
-        content: `You are a calm, supportive companion for a focus and execution app called STRYD.
-The user is working on: ${context.currentTask ?? "a task"}.
-Current step: ${context.currentStepTitle ?? "N/A"} — ${context.currentStepInstruction ?? ""}
-They have completed ${context.completedSteps} of ${context.totalSteps} steps.
-Mood score: ${context.moodScore ?? "unknown"}
-
-Rules:
-- Be calm, direct, and human
-- Never use exclamation marks or ALL CAPS
-- Never use urgency or pressure
-- Never tell the user they are behind or doing it wrong
-- If they are stuck, offer to shrink the scope or reframe
-- Address the user by name only if provided in UI context
-- Offer one suggestion at a time
-- Respect that the user is skilled — do not explain basic concepts
-- Never reference specific software tools`,
-      }
-
-      const response = await callDeepseek(
-        [systemMessage, ...messages.slice(-5), { role: "user", content: userMessage }],
-        context.userName,
-        { max_tokens: 300, temperature: 0.5 }
-      )
-
-      setMessages((prev) => [...prev, { role: "assistant", content: response }])
-    } catch {
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "assistant",
-          content:
-            "Take a moment. When you are ready, start with whatever feels most natural.",
-        },
-      ])
-    } finally {
-      setIsLoading(false)
-    }
-  }, [inputText, isLoading, messages, context])
+    await sendMessage(message)
+  }, [inputText, isLoading, sendMessage])
 
   if (!isVisible) return null
 
@@ -176,7 +120,7 @@ Rules:
           >
             <TouchableOpacity
               activeOpacity={1}
-              onPress={() => {}}
+              onPress={() => { }}
               style={styles.panel}
             >
               <Animated.View
@@ -206,11 +150,11 @@ Rules:
                     placeholder="Type here..."
                     placeholderTextColor={theme.colors.onSurfaceVariant}
                     style={styles.input}
-                    onSubmitEditing={sendMessage}
+                    onSubmitEditing={handleSend}
                     returnKeyType="send"
                   />
                   <TouchableOpacity
-                    onPress={sendMessage}
+                    onPress={handleSend}
                     style={styles.sendButton}
                     disabled={!inputText.trim() || isLoading}
                   >

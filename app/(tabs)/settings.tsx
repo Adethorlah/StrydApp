@@ -1,12 +1,14 @@
 import { useState, useEffect, useCallback } from "react"
-import { View, Text, StyleSheet, ScrollView } from "react-native"
+import { View, Text, StyleSheet, ScrollView, Linking } from "react-native"
 import { router } from "expo-router"
 import { theme } from "../../src/theme/tokens"
 import { StyledInput } from "../../src/components/TextInput"
 import { Button } from "../../src/components/Button"
+import { AiCompanion } from "../../src/components/AiCompanion"
 import { useOnboarding } from "../../src/hooks/useOnboarding"
 import { useAuth } from "../../src/hooks/useAuth"
 import { useNotifications } from "../../src/hooks/useNotifications"
+import AsyncStorage from "@react-native-async-storage/async-storage"
 import { getUserName } from "../../src/lib/storage"
 import { supabase } from "../../src/lib/supabase"
 import { updateProfileName } from "../../src/lib/supabase-users"
@@ -108,10 +110,32 @@ export default function Settings() {
         <Text style={styles.settingText}>Version 1.0.0</Text>
         <Button
           title="Privacy Policy"
-          onPress={() => {}}
+          onPress={() => Linking.openURL("https://strydapp.com/privacy")}
           variant="link"
         />
       </View>
+
+      <Text style={styles.sectionTitle}>Debug</Text>
+      <View style={styles.section}>
+        <Button
+          title="Reset Onboarding"
+          onPress={async () => {
+            await AsyncStorage.setItem("onboarding_complete", "false")
+            router.replace("/(onboarding)/welcome-1")
+          }}
+          variant="secondary"
+        />
+      </View>
+
+      <AiCompanion
+        context={{
+          userName: userName ?? "there",
+          completedSteps: 0,
+          totalSteps: 0,
+        }}
+        isVisible
+        shouldPulse={false}
+      />
     </ScrollView>
   )
 }

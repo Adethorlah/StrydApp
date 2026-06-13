@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef } from "react"
-import { generateLocalFallback, FallbackResult } from "../lib/localFallback"
-
-const EDGE_FUNCTION_URL = `${process.env.EXPO_PUBLIC_SUPABASE_URL}/functions/v1/task-breakdown`
+import { generateLocalFallback } from "../lib/localFallback"
+import { FallbackResult } from "../types"
+import { callTaskBreakdown } from "../lib/supabase-tasks"
 
 interface BreakdownState {
   status: "idle" | "loading" | "building" | "thinking" | "almost_there" | "done" | "error"
@@ -19,87 +19,67 @@ export function useBreakdownTask() {
   const abortRef = useRef(false)
 
   const breakDown = useCallback(
-    async (taskTitle: string, moodScore: number): Promise<FallbackResult> => {
+    async (taskTitle: string, moodScore: number, availableMinutes: number): Promise<FallbackResult> => {
       abortRef.current = false
-      const startTime = Date.now()
-
       setState({ status: "loading", message: "Building your path...", result: null })
 
-      const tryEdgeFunction = async (): Promise<FallbackResult | null> => {
-        try {
-          const response = await fetch(EDGE_FUNCTION_URL, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY}`,
-            },
-            body: JSON.stringify({
-              task_title: taskTitle,
-              mood_score: moodScore,
-            }),
-          })
-
-          if (!response.ok) return null
-          const data = await response.json()
-          return data as FallbackResult
-        } catch {
-          return null
+      // First attempt
+      try {
+        setState({ status: "building", message: "Building your path...", result: null })
+        const data = await callTaskBreakdown(taskTitle, moodScore, availableMinutes)
+        console.log("Breakdown response:", JSON.stringify(data))
+        if (data) {
+          setState({ status: "done", message: "", result: data })
+          return data
         }
+      } catch (e) {
+        console.log("Breakdown error:", e)
       }
 
-      while (true) {
-        const elapsed = Date.now() - startTime
-
-        if (elapsed >= 25000 || abortRef.current) {
-          break
-        }
-
-        if (elapsed < 10000) {
-          const result = await tryEdgeFunction()
-          if (result) {
-            setState({ status: "done", message: "", result })
-            return result
-          }
-          // Wait before checking again
-          await new Promise((r) => setTimeout(r, 2000))
-          continue
-        }
-
-        if (elapsed < 10000) {
-          setState({ status: "building", message: "Building your path...", result: null })
-        } else if (elapsed < 10000) {
-          // First 10s: keep trying
-          const result = await tryEdgeFunction()
-          if (result) {
-            setState({ status: "done", message: "", result })
-            return result
-          }
-          await new Promise((r) => setTimeout(r, 1000))
-        } else if (elapsed < 20000) {
-          setState({ status: "thinking", message: "Still thinking... your goal is a good one.", result: null })
-          // retry 1 at 10s
-          if (elapsed >= 10000 && elapsed < 11000) {
-            const result = await tryEdgeFunction()
-            if (result) {
-              setState({ status: "done", message: "", result })
-              return result
-            }
-          }
-          await new Promise((r) => setTimeout(r, 1000))
-        } else if (elapsed < 25000) {
-          setState({ status: "almost_there", message: "Almost there...", result: null })
-          // retry 2 at 20s
-          if (elapsed >= 20000 && elapsed < 21000) {
-            const result = await tryEdgeFunction()
-            if (result) {
-              setState({ status: "done", message: "", result })
-              return result
-            }
-          }
-          await new Promise((r) => setTimeout(r, 1000))
-        }
+      if (abortRef.current) {
+        const fallback = generateLocalFallback(taskTitle)
+        setState({ status: "done", message: "", result: fallback })
+        return fallback
       }
 
+      // Wait 3 seconds then retry
+      setState({ status: "thinking", message: "Still thinking... your goal is a good one.", result: null })
+      await new Promise((r) => setTimeout(r, 3000))
+
+      try {
+        const data = await callTaskBreakdown(taskTitle, moodScore, availableMinutes)
+        console.log("Breakdown retry 2 response:", JSON.stringify(data))
+        if (data) {
+          setState({ status: "done", message: "", result: data })
+          return data
+        }
+      } catch (e) {
+        console.log("Breakdown retry 2 error:", e)
+      }
+
+      if (abortRef.current) {
+        const fallback = generateLocalFallback(taskTitle)
+        setState({ status: "done", message: "", result: fallback })
+        return fallback
+      }
+
+      // Wait 3 more seconds then final attempt
+      setState({ status: "almost_there", message: "Almost there...", result: null })
+      await new Promise((r) => setTimeout(r, 3000))
+
+      try {
+        const data = await callTaskBreakdown(taskTitle, moodScore, availableMinutes)
+        console.log("Breakdown retry 3 response:", JSON.stringify(data))
+        if (data) {
+          setState({ status: "done", message: "", result: data })
+          return data
+        }
+      } catch (e) {
+        console.log("Breakdown retry 3 error:", e)
+      }
+
+      // All attempts failed — use local fallback
+      console.log("All attempts failed, using local fallback")
       const fallback = generateLocalFallback(taskTitle)
       setState({ status: "done", message: "", result: fallback })
       return fallback

@@ -1,7 +1,15 @@
-import { useState } from "react"
-import { View, Text, TouchableOpacity, StyleSheet } from "react-native"
+import { useRef, useEffect } from "react"
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Animated,
+  Dimensions,
+  Modal,
+  ScrollView,
+} from "react-native"
 import { theme } from "../theme/tokens"
-import { Button } from "./Button"
 
 interface StepNodeProps {
   stepOrder: number
@@ -11,8 +19,13 @@ interface StepNodeProps {
   isActive: boolean
   isCompleted: boolean
   isLocked: boolean
+  isSelected: boolean
+  onSelect: () => void
+  onDismiss: () => void
   onBegin?: () => void
 }
+
+const { height: SCREEN_HEIGHT } = Dimensions.get("window")
 
 export function StepNode({
   stepOrder,
@@ -22,163 +35,305 @@ export function StepNode({
   isActive,
   isCompleted,
   isLocked,
+  isSelected,
+  onSelect,
+  onDismiss,
   onBegin,
 }: StepNodeProps) {
-  const [expanded, setExpanded] = useState(false)
+  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current
+  const pulseAnim = useRef(new Animated.Value(1)).current
 
-  if (isLocked) {
-    return (
-      <View style={[styles.node, styles.lockedNode]}>
-        <View style={[styles.dot, styles.lockedDot]} />
-        <Text style={styles.lockedTitle}>{title}</Text>
-      </View>
-    )
+  useEffect(() => {
+    if (isSelected) {
+      Animated.spring(slideAnim, {
+        toValue: 0,
+        useNativeDriver: true,
+        tension: 65,
+        friction: 11,
+      }).start()
+    } else {
+      Animated.timing(slideAnim, {
+        toValue: SCREEN_HEIGHT,
+        duration: 250,
+        useNativeDriver: true,
+      }).start()
+    }
+  }, [isSelected])
+
+  useEffect(() => {
+    if (isActive) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulseAnim, {
+            toValue: 1.08,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulseAnim, {
+            toValue: 1,
+            duration: 1000,
+            useNativeDriver: true,
+          }),
+        ])
+      ).start()
+    }
+  }, [isActive])
+
+  const getNodeStyle = () => {
+    if (isCompleted) return [styles.node, styles.completedNode]
+    if (isActive) return [styles.node, styles.activeNode]
+    if (isLocked) return [styles.node, styles.lockedNode]
+    return [styles.node, styles.upcomingNode]
   }
 
-  if (isCompleted) {
-    return (
-      <TouchableOpacity
-        onPress={() => setExpanded(!expanded)}
-        style={[styles.node, styles.completedNode]}
-        activeOpacity={0.7}
-      >
-        <View style={[styles.dot, styles.completedDot]}>
-          <Text style={styles.checkmark}>✓</Text>
-        </View>
-        <View style={styles.content}>
-          <Text style={styles.completedTitle}>{title}</Text>
-          {expanded && instruction && (
-            <Text style={styles.completedInstruction}>{instruction}</Text>
-          )}
-        </View>
-      </TouchableOpacity>
-    )
+  const renderNodeContent = () => {
+    if (isCompleted) return <Text style={styles.checkmark}>✓</Text>
+    if (isLocked) return <Text style={styles.lockIcon}>🔒</Text>
+    if (isActive) return <Text style={styles.playIcon}>▶</Text>
+    return <Text style={styles.stepNumberText}>{stepOrder}</Text>
   }
+
+  const isDisabled = isLocked || (!isActive && !isCompleted)
 
   return (
-    <TouchableOpacity
-      onPress={() => setExpanded(!expanded)}
-      style={[styles.node, styles.activeNode]}
-      activeOpacity={0.7}
-    >
-      <View style={[styles.dot, styles.activeDot]}>
-        <Text style={styles.stepNumber}>{stepOrder}</Text>
-      </View>
-      <View style={styles.content}>
-        <Text style={styles.activeTitle}>{title}</Text>
-        {expanded && (
-          <>
-            {instruction && (
-              <Text style={styles.instruction}>{instruction}</Text>
-            )}
-            {estimatedMinutes && (
-              <Text style={styles.time}>About {estimatedMinutes} minutes</Text>
-            )}
-            {onBegin && (
-              <Button
-                title="Begin this step"
-                onPress={onBegin}
-                variant="primary"
-                style={styles.beginButton}
-              />
-            )}
-          </>
-        )}
-      </View>
-    </TouchableOpacity>
+    <>
+      <TouchableOpacity
+        onPress={isDisabled ? undefined : onSelect}
+        activeOpacity={isDisabled ? 1 : 0.75}
+        disabled={isDisabled}
+      >
+        <Animated.View
+          style={[
+            getNodeStyle(),
+            isActive && { transform: [{ scale: pulseAnim }] },
+          ]}
+        >
+          {renderNodeContent()}
+        </Animated.View>
+      </TouchableOpacity>
+
+      <Modal
+        visible={isSelected}
+        transparent
+        animationType="none"
+        onRequestClose={onDismiss}
+      >
+        <TouchableOpacity
+          style={styles.backdrop}
+          activeOpacity={1}
+          onPress={onDismiss}
+        >
+          <Animated.View
+            style={[
+              styles.sheet,
+              { transform: [{ translateY: slideAnim }] },
+            ]}
+          >
+            <TouchableOpacity activeOpacity={1} onPress={() => { }}>
+
+              {/* Handle bar */}
+              <View style={styles.handle} />
+
+              {/* Back button */}
+              <TouchableOpacity onPress={onDismiss} style={styles.backButton}>
+                <Text style={styles.backText}>← Back</Text>
+              </TouchableOpacity>
+
+              <ScrollView
+                style={styles.sheetScroll}
+                showsVerticalScrollIndicator={false}
+              >
+                {/* Step number badge */}
+                <View style={styles.stepBadge}>
+                  <Text style={styles.stepBadgeText}>
+                    Step {stepOrder}
+                    {estimatedMinutes ? ` · ${estimatedMinutes} min` : ""}
+                  </Text>
+                </View>
+
+                {/* Title */}
+                <Text style={styles.sheetTitle}>{title}</Text>
+
+                {/* Instruction */}
+                {instruction && (
+                  <Text style={styles.sheetInstruction}>{instruction}</Text>
+                )}
+
+                {/* Begin button */}
+                {onBegin && isActive && (
+                  <TouchableOpacity
+                    style={styles.beginButton}
+                    onPress={onBegin}
+                    activeOpacity={0.85}
+                  >
+                    <Text style={styles.beginButtonText}>
+                      I'm ready — let's go
+                    </Text>
+                  </TouchableOpacity>
+                )}
+
+                {/* Completed state message */}
+                {isCompleted && (
+                  <View style={styles.completedBanner}>
+                    <Text style={styles.completedBannerText}>
+                      ✓ You've completed this step
+                    </Text>
+                  </View>
+                )}
+
+                <View style={{ height: 40 }} />
+              </ScrollView>
+            </TouchableOpacity>
+          </Animated.View>
+        </TouchableOpacity>
+      </Modal>
+    </>
   )
 }
 
 const styles = StyleSheet.create({
+  // --- Node ---
   node: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.radius.lg,
-    marginVertical: theme.spacing.xs,
-  },
-  activeNode: {
-    backgroundColor: theme.colors.surfaceContainerLow,
-  },
-  completedNode: {
-    backgroundColor: theme.colors.surfaceContainerHighest,
-  },
-  lockedNode: {
-    opacity: 0.4,
-  },
-  dot: {
-    width: 32,
-    height: 32,
+    width: 56,
+    height: 56,
     borderRadius: 16,
     alignItems: "center",
     justifyContent: "center",
-    marginRight: theme.spacing.md,
-    marginTop: 2,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  activeDot: {
+  activeNode: {
+    width: 64,
+    height: 64,
+    borderRadius: 18,
     backgroundColor: theme.colors.primary,
   },
-  completedDot: {
-    backgroundColor: theme.colors.success,
+  completedNode: {
+    backgroundColor: theme.colors.success ?? "#4CAF50",
+    opacity: 0.85,
   },
-  lockedDot: {
-    backgroundColor: theme.colors.outline,
+  upcomingNode: {
+    backgroundColor: theme.colors.surfaceContainerHighest,
+    borderWidth: 2,
+    borderColor: theme.colors.outline,
   },
-  stepNumber: {
-    fontFamily: theme.typography.fontFamily,
-    fontWeight: theme.typography.weight.semibold,
-    color: theme.colors.onPrimary,
-    fontSize: theme.typography.label.small.fontSize,
+  lockedNode: {
+    backgroundColor: theme.colors.surfaceContainerHighest,
+    opacity: 0.4,
   },
+
+  // --- Node content ---
   checkmark: {
-    color: theme.colors.onSuccess,
+    fontSize: 22,
+    color: "#fff",
+    fontWeight: "700",
+  },
+  lockIcon: {
+    fontSize: 18,
+  },
+  playIcon: {
+    fontSize: 20,
+    color: "#fff",
+    marginLeft: 3,
+  },
+  stepNumberText: {
     fontSize: 16,
+    fontWeight: "600",
+    color: theme.colors.onSurfaceVariant,
+    fontFamily: theme.typography.fontFamily,
+  },
+
+  // --- Bottom sheet ---
+  backdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.35)",
+    justifyContent: "flex-end",
+  },
+  sheet: {
+    backgroundColor: theme.colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.sm,
+    maxHeight: SCREEN_HEIGHT * 0.75,
+  },
+  sheetScroll: {
+    paddingTop: theme.spacing.sm,
+  },
+  handle: {
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: theme.colors.outline,
+    alignSelf: "center",
+    marginBottom: theme.spacing.sm,
+  },
+  backButton: {
+    paddingVertical: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
+  },
+  backText: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.body.medium.fontSize,
+    color: theme.colors.primary,
+    fontWeight: theme.typography.weight.medium,
+  },
+  stepBadge: {
+    alignSelf: "flex-start",
+    backgroundColor: theme.colors.primaryContainer ?? theme.colors.surfaceContainerLow,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.radius.full,
+    marginBottom: theme.spacing.md,
+  },
+  stepBadgeText: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.label.small.fontSize,
+    color: theme.colors.primary,
     fontWeight: theme.typography.weight.semibold,
   },
-  content: {
-    flex: 1,
+  sheetTitle: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.title.fontSize,
+    lineHeight: theme.typography.title.lineHeight,
+    fontWeight: theme.typography.weight.semibold,
+    color: theme.colors.onSurface,
+    marginBottom: theme.spacing.md,
   },
-  activeTitle: {
+  sheetInstruction: {
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.body.large.fontSize,
-    fontWeight: theme.typography.weight.medium,
-    color: theme.colors.onSurface,
     lineHeight: theme.typography.body.large.lineHeight,
-  },
-  completedTitle: {
-    fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.body.medium.fontSize,
-    color: theme.colors.onSurface,
-    lineHeight: theme.typography.body.medium.lineHeight,
-  },
-  lockedTitle: {
-    fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.body.medium.fontSize,
     color: theme.colors.onSurfaceVariant,
-    lineHeight: theme.typography.body.medium.lineHeight,
-  },
-  instruction: {
-    fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.body.medium.fontSize,
-    color: theme.colors.onSurfaceVariant,
-    lineHeight: theme.typography.body.medium.lineHeight,
-    marginTop: theme.spacing.sm,
-  },
-  completedInstruction: {
-    fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.body.small.fontSize,
-    color: theme.colors.onSurfaceVariant,
-    lineHeight: theme.typography.body.small.lineHeight,
-    marginTop: theme.spacing.xs,
-  },
-  time: {
-    fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.body.small.fontSize,
-    color: theme.colors.onSurfaceVariant,
-    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.xl,
   },
   beginButton: {
-    marginTop: theme.spacing.md,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.lg,
+    paddingVertical: theme.spacing.md,
+    alignItems: "center",
+    marginBottom: theme.spacing.md,
+  },
+  beginButtonText: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.body.large.fontSize,
+    fontWeight: theme.typography.weight.semibold,
+    color: theme.colors.onPrimary,
+  },
+  completedBanner: {
+    backgroundColor: theme.colors.surfaceContainerLow,
+    borderRadius: theme.radius.lg,
+    paddingVertical: theme.spacing.md,
+    alignItems: "center",
+    marginBottom: theme.spacing.md,
+  },
+  completedBannerText: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.body.medium.fontSize,
+    color: theme.colors.success ?? "#4CAF50",
+    fontWeight: theme.typography.weight.medium,
   },
 })

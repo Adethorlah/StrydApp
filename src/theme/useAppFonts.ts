@@ -2,9 +2,9 @@ import { useFonts, Outfit_400Regular, Outfit_500Medium, Outfit_600SemiBold } fro
 
 export function useAppFonts() {
   const [fontsLoaded, fontsError] = useFonts({
-    Outfit_400Regular,
-    Outfit_500Medium,
-    Outfit_600SemiBold,
+    "Outfit": Outfit_400Regular,
+    "Outfit-Medium": Outfit_500Medium,
+    "Outfit-SemiBold": Outfit_600SemiBold,
   })
 
   return { fontsLoaded, fontsError }

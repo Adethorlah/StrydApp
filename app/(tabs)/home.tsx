@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from "react-native"
 import { router } from "expo-router"
 import { theme } from "../../src/theme/tokens"
@@ -6,27 +6,67 @@ import { StyledInput } from "../../src/components/TextInput"
 import { Button } from "../../src/components/Button"
 import { EmojiMoodPicker } from "../../src/components/EmojiMoodPicker"
 import { LoadingState } from "../../src/components/LoadingState"
+import { AiCompanion } from "../../src/components/AiCompanion"
 import { useOnboarding } from "../../src/hooks/useOnboarding"
 import { useMoodState } from "../../src/hooks/useMoodState"
 import { useTaskState } from "../../src/hooks/useTaskState"
 import { useBreakdownTask } from "../../src/hooks/useBreakdownTask"
-import { getUserName } from "../../src/lib/storage"
+import { useAuth } from "../../src/hooks/useAuth"
+import { FallbackStep } from "../../src/types"
+import {
+  getUserName,
+  setRestUntil,
+  getHasSeenSignUpPrompt,
+  setHasSeenSignUpPrompt,
+} from "../../src/lib/storage"
 
 export default function Home() {
   const { userName } = useOnboarding()
   const { mood, setMood } = useMoodState()
-  const { hasActiveTask, isTaskComplete, currentTask, currentStep, startNewTask, clearTask } =
-    useTaskState()
+  const {
+    hasActiveTask,
+    isTaskComplete,
+    currentTask,
+    currentStep,
+    currentStepIndex,
+    completedStepIds,
+    startNewTask,
+    clearTask,
+  } = useTaskState()
   const { state: breakdownState, breakDown } = useBreakdownTask()
+  const { isAuthenticated } = useAuth()
 
   const [goal, setGoal] = useState("")
   const [showMoodCheck, setShowMoodCheck] = useState(false)
   const [isFirstTask, setIsFirstTask] = useState(true)
   const [name, setName] = useState<string | null>(null)
+  const hasRedirectedSignUp = useRef(false)
 
   useEffect(() => {
     getUserName().then(setName)
   }, [])
+
+  useEffect(() => {
+    if (isTaskComplete && !isAuthenticated && !hasRedirectedSignUp.current) {
+      getHasSeenSignUpPrompt().then((seen) => {
+        if (!seen) {
+          hasRedirectedSignUp.current = true
+          setHasSeenSignUpPrompt()
+          router.push("/sign-up")
+        }
+      })
+    }
+  }, [isTaskComplete, isAuthenticated])
+
+  const companionContext = {
+    userName: userName ?? name ?? "there",
+    currentTask: currentTask?.title,
+    currentStepTitle: currentStep?.title,
+    currentStepInstruction: currentStep?.instruction,
+    moodScore: mood ?? undefined,
+    completedSteps: completedStepIds.length,
+    totalSteps: currentTask?.steps.length ?? 0,
+  }
 
   const getGreeting = useCallback(() => {
     const n = userName ?? name ?? "there"
@@ -37,58 +77,66 @@ export default function Home() {
     return `Hey ${n}, no pressure. What's one thing you'd like to move forward today?`
   }, [userName, name, mood])
 
+  const flattenSteps = (result: any) => {
+    if (result.is_multi_phase && result.phases) {
+      return result.phases.flatMap((p: any) => p.steps)
+    }
+    return result.steps ?? []
+  }
+
   const handleSubmitGoal = useCallback(async () => {
     if (!goal.trim()) return
+    if (breakdownState.status === "loading" || breakdownState.status === "building") return
 
-    if (isFirstTask) {
-      // Use onboarding mood for first task
-      await startNewTask({
-        title: goal.trim(),
-        steps: [],
-      })
-      setShowMoodCheck(false)
-      const result = await breakDown(goal.trim(), mood ?? 3)
+    try {
+      if (isFirstTask) {
+        const result = await breakDown(goal.trim(), mood ?? 3, 25)
+        await startNewTask({
+          title: goal.trim(),
+          steps: flattenSteps(result).map((s: FallbackStep, i: number) => ({
+            step_order: i + 1,
+            title: s.title,
+            instruction: s.instruction,
+            estimated_minutes: s.estimated_minutes,
+          })),
+          is_multi_phase: result.is_multi_phase,
+        })
 
-      await startNewTask({
-        title: goal.trim(),
-        steps: result.steps.map((s, i) => ({
-          step_order: i + 1,
-          title: s.title,
-          instruction: s.instruction,
-          estimated_minutes: s.estimated_minutes,
-        })),
-        is_multi_phase: result.is_multi_phase,
-      })
-
-      setIsFirstTask(false)
-      setGoal("")
-      router.push("/(tabs)/journey")
-    } else {
-      setShowMoodCheck(true)
+        setIsFirstTask(false)
+        setGoal("")
+        router.push("/(tabs)/journey")
+      } else {
+        setShowMoodCheck(true)
+      }
+    } catch {
+      // Silent failure
     }
-  }, [goal, isFirstTask, mood, startNewTask, breakDown])
+  }, [goal, isFirstTask, mood, startNewTask, breakDown, breakdownState.status])
 
   const handlePreTaskMood = useCallback(
     async (score: number) => {
-      await setMood(score)
-      setShowMoodCheck(false)
+      try {
+        await setMood(score)
+        setShowMoodCheck(false)
 
-      const result = await breakDown(goal.trim(), score)
+        const result = await breakDown(goal.trim(), score, 25)
+        await startNewTask({
+          title: goal.trim(),
+          steps: flattenSteps(result).map((s: FallbackStep, i: number) => ({
+            step_order: i + 1,
+            title: s.title,
+            instruction: s.instruction,
+            estimated_minutes: s.estimated_minutes,
+          })),
+          is_multi_phase: result.is_multi_phase,
+        })
 
-      await startNewTask({
-        title: goal.trim(),
-        steps: result.steps.map((s, i) => ({
-          step_order: i + 1,
-          title: s.title,
-          instruction: s.instruction,
-          estimated_minutes: s.estimated_minutes,
-        })),
-        is_multi_phase: result.is_multi_phase,
-      })
-
-      setGoal("")
-      setIsFirstTask(false)
-      router.push("/(tabs)/journey")
+        setGoal("")
+        setIsFirstTask(false)
+        router.push("/(tabs)/journey")
+      } catch {
+        // Silent failure
+      }
     },
     [goal, startNewTask, breakDown, setMood]
   )
@@ -98,6 +146,7 @@ export default function Home() {
   }, [])
 
   const handleStartNew = useCallback(async () => {
+    hasRedirectedSignUp.current = false
     await clearTask()
     setShowMoodCheck(false)
     setGoal("")
@@ -105,6 +154,7 @@ export default function Home() {
 
   const handleRest = useCallback(async () => {
     const twoHoursLater = new Date(Date.now() + 2 * 60 * 60 * 1000)
+    await setRestUntil(twoHoursLater.toISOString())
     await clearTask()
     setGoal("")
   }, [clearTask])
@@ -128,6 +178,7 @@ export default function Home() {
           variant="quiet"
           style={styles.actionButton}
         />
+        <AiCompanion context={companionContext} isVisible shouldPulse={false} />
       </View>
     )
   }
@@ -140,16 +191,26 @@ export default function Home() {
         <Text style={styles.taskTitle}>{currentTask.title}</Text>
         <Text style={styles.stepTitle}>{currentStep.title}</Text>
         <Button title="Continue" onPress={handleContinue} variant="primary" style={styles.actionButton} />
+        <AiCompanion context={companionContext} isVisible shouldPulse={false} />
       </View>
     )
   }
 
   // Loading state
-  if (breakdownState.status === "loading" || breakdownState.status === "building") {
-    return <LoadingState message={breakdownState.message} />
+  if (
+    breakdownState.status === "loading" ||
+    breakdownState.status === "building" ||
+    breakdownState.status === "thinking" ||
+    breakdownState.status === "almost_there"
+  ) {
+    return (
+      <View style={styles.container}>
+        <LoadingState message={breakdownState.message} />
+      </View>
+    )
   }
 
-  // Mood check (from 2nd task onwards)
+  // Mood check (2nd+ task)
   if (showMoodCheck) {
     return (
       <View style={styles.container}>
@@ -181,6 +242,7 @@ export default function Home() {
         disabled={!goal.trim()}
         style={styles.actionButton}
       />
+      <AiCompanion context={companionContext} isVisible shouldPulse={false} />
     </KeyboardAvoidingView>
   )
 }
@@ -190,7 +252,8 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: theme.spacing.xl,
+    paddingHorizontal: 24,
+    paddingVertical: theme.spacing.xl,
     backgroundColor: theme.colors.background,
   },
   greeting: {

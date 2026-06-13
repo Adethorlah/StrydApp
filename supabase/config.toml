@@ -1,0 +1,13 @@
+project_id = "strydapp"
+
+[auth]
+enabled = true
+enable_signup = true
+
+[auth.external.google]
+enabled = false
+client_id = ""
+secret = ""
+
+[analytics]
+enabled = false

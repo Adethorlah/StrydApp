@@ -107,3 +107,20 @@ export async function completeTask(taskId: string) {
 
   if (error) throw error
 }
+
+export async function callTaskBreakdown(
+  taskTitle: string,
+  moodScore: number,
+  availableMinutes: number
+) {
+  const { data, error } = await supabase.functions.invoke("task-breakdown", {
+    body: {
+      task_title: taskTitle,
+      mood_score: moodScore,
+      available_minutes: availableMinutes,
+    },
+  });
+
+  if (error) throw error;
+  return data;
+}

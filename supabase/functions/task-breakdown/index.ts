@@ -1,14 +1,144 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts"
-import { createClient } from "jsr:@supabase/supabase-js@2"
 
 const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY")
-const SUPABASE_URL = Deno.env.get("SUPABASE_URL")
-const SUPABASE_ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")
+const DEEPSEEK_API_URL = "https://api.deepseek.com/v1/chat/completions"
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 }
+
+// --- Tone Safety ---
+
+interface ToneScanResult {
+  is_safe: boolean
+  flagged_items: string[]
+}
+
+const BLOCKED_WORDS = [
+  "fail", "failure", "failed", "wrong", "bad", "stupid", "lazy",
+  "late", "behind", "overdue", "must", "should", "productive",
+  "procrastinat", "urgent", "disappointing", "pathetic", "weak",
+  "worthless", "output", "efficiency",
+]
+
+const BLOCKED_PHRASES = [
+  "you should have", "why haven't you", "you need to",
+  "you failed to", "you still haven't", "you're behind",
+  "you're late", "you didn't", "what's stopping you", "you're not",
+]
+
+function toneSafetyScan(text: string): ToneScanResult {
+  const lower = text.toLowerCase()
+  const flagged: string[] = []
+
+  if (/!/.test(text)) flagged.push("exclamation mark")
+  if (/[A-Z]{3,}/.test(text)) flagged.push("ALL CAPS")
+
+  for (const word of BLOCKED_WORDS) {
+    if (lower.includes(word)) flagged.push(word)
+  }
+
+  for (const phrase of BLOCKED_PHRASES) {
+    if (lower.includes(phrase)) flagged.push(phrase)
+  }
+
+  const numericUrgency = /\d+\s*(days?|hours?|minutes?|weeks?)\s*(late|behind|overdue|left)/i
+  if (numericUrgency.test(text)) flagged.push("numeric urgency")
+
+  return { is_safe: flagged.length === 0, flagged_items: flagged }
+}
+
+const FALLBACK_RESPONSES = {
+  step: "Open the work and take a look at where you are.",
+}
+
+const REPAIR_AGENT_PROMPT = `You are rewriting AI-generated text for STRYD, a calm focus app.
+
+Rewrite the text so it:
+- Removes all flagged items
+- Keeps the same meaning and helpful intent
+- Uses calm, direct, non-judgmental language
+- Contains no exclamation marks
+- Contains no urgency or pressure framing
+- Sounds like a steady, trusted friend
+
+Return rewritten text only. No explanation.`
+
+async function repairText(text: string, flagged: string[]): Promise<string> {
+  try {
+    const response = await fetch(DEEPSEEK_API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-chat",
+        messages: [
+          { role: "system", content: REPAIR_AGENT_PROMPT },
+          {
+            role: "user",
+            content: `Flagged items: ${flagged.join(", ")}\nOriginal text: ${text}`,
+          },
+        ],
+        max_tokens: 300,
+        temperature: 0.3,
+      }),
+    })
+    const data = await response.json()
+    return data.choices?.[0]?.message?.content ?? text
+  } catch {
+    return text
+  }
+}
+
+async function scanAndRepairText(text: string): Promise<string> {
+  const scan = toneSafetyScan(text)
+  if (scan.is_safe) return text
+
+  let repaired = await repairText(text, scan.flagged_items)
+  const rescan = toneSafetyScan(repaired)
+
+  if (!rescan.is_safe) {
+    repaired = await repairText(repaired, rescan.flagged_items)
+    const finalScan = toneSafetyScan(repaired)
+    if (!finalScan.is_safe) return FALLBACK_RESPONSES.step
+  }
+
+  return repaired
+}
+
+// --- Fallback Steps ---
+
+function generateFallbackSteps(taskTitle: string) {
+  return {
+    is_multi_phase: false,
+    total_estimated_minutes: 15,
+    steps: [
+      {
+        step_order: 1,
+        title: "Get ready to start",
+        instruction: `Clear your space and open everything you need for: ${taskTitle}`,
+        estimated_minutes: 2,
+      },
+      {
+        step_order: 2,
+        title: "Do the first small piece",
+        instruction: `Pick the smallest part of "${taskTitle}" and work on just that for 5 minutes`,
+        estimated_minutes: 5,
+      },
+      {
+        step_order: 3,
+        title: "Keep the momentum going",
+        instruction: `Continue with the next part of "${taskTitle}" until you feel done`,
+        estimated_minutes: 8,
+      },
+    ],
+  }
+}
+
+// --- Main Handler ---
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -16,17 +146,17 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { task_title, task_description, mood_score, user_id } = await req.json()
+    const { task_title, task_description, mood_score, available_minutes } = await req.json()
 
-    if (!task_title || mood_score === undefined || !user_id) {
+    if (!task_title || mood_score === undefined) {
       return new Response(
-        JSON.stringify({ error: "Missing required fields: task_title, mood_score, user_id" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify(generateFallbackSteps(task_title ?? "your task")),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       )
     }
 
     // Step 1: Determine complexity
-    const complexityResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    const complexityResponse = await fetch(DEEPSEEK_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -57,6 +187,7 @@ Respond with JSON only: { "is_multi_phase": boolean, "reasoning": "brief explana
         ],
         max_tokens: 200,
         temperature: 0.3,
+        response_format: { type: "json_object" },
       }),
     })
 
@@ -78,8 +209,12 @@ Respond with JSON only: { "is_multi_phase": boolean, "reasoning": "brief explana
       firstStepRule = "Steps can be more substantial."
     }
 
+    const timeContext = available_minutes
+      ? `The user has ${available_minutes} minutes available. Size the steps to fit within this time.`
+      : ""
+
     // Step 3: Generate the path
-    const pathResponse = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    const pathResponse = await fetch(DEEPSEEK_API_URL, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -102,6 +237,7 @@ STRICT RULES:
 - Each step must feel like it was written for this exact user and this exact goal
 - Step sizing: ${stepSize}
 - ${firstStepRule}
+- ${timeContext}
 
 ${complexity.is_multi_phase ? `This task needs multiple phases.
 Phase labels must describe purpose, not sequence. Examples:
@@ -148,29 +284,41 @@ Output format (strict JSON only, no markdown, no preamble):
             content: `Task: ${task_title}${task_description ? `\nDescription: ${task_description}` : ""}`,
           },
         ],
-        max_tokens: 2000,
-        temperature: 0.5,
+        max_tokens: 800,
+        temperature: 0.3,
+        response_format: { type: "json_object" },
       }),
     })
 
     const pathData = await pathResponse.json()
     const rawContent = pathData.choices?.[0]?.message?.content ?? ""
-    
-    // Parse JSON from response (handle potential wrapping)
-    const jsonMatch = rawContent.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error("Failed to parse AI response as JSON")
+    const result = JSON.parse(rawContent)
+
+    // Step 4: Run tone safety on every step title and instruction
+    if (result.is_multi_phase && result.phases) {
+      for (const phase of result.phases) {
+        for (const step of phase.steps) {
+          step.title = await scanAndRepairText(step.title)
+          step.instruction = await scanAndRepairText(step.instruction)
+        }
+      }
+    } else if (result.steps) {
+      for (const step of result.steps) {
+        step.title = await scanAndRepairText(step.title)
+        step.instruction = await scanAndRepairText(step.instruction)
+      }
     }
-    const result = JSON.parse(jsonMatch[0])
 
     return new Response(JSON.stringify(result), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     })
-  } catch (error) {
-    console.error("Task breakdown error:", error.message)
+
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "Unknown error"
+    console.error("Task breakdown error:", message)
     return new Response(
-      JSON.stringify({ error: "Internal error", is_multi_phase: false, total_estimated_minutes: 15, steps: [] }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      JSON.stringify(generateFallbackSteps("your task")),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     )
   }
 })

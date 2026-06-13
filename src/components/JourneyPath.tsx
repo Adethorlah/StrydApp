@@ -1,8 +1,9 @@
+import { useState } from "react"
 import { ScrollView, View, Text, StyleSheet, Dimensions } from "react-native"
 import Svg, { Path } from "react-native-svg"
 import { theme } from "../theme/tokens"
 import { StepNode } from "./StepNode"
-import type { Step } from "../hooks/useTaskState"
+import type { Step } from "../types"
 
 interface Phase {
   phase_order: number
@@ -18,20 +19,63 @@ interface JourneyPathProps {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window")
-const PATH_WIDTH = SCREEN_WIDTH - theme.spacing.xl * 2
-const NODE_SPACING = 80
+const CANVAS_WIDTH = SCREEN_WIDTH - theme.spacing.xl * 2
+const NODE_SIZE = 64
+const NODE_SPACING = 100
+const ZIGZAG_OFFSET = CANVAS_WIDTH * 0.28
 
-function generateCurvedPath(index: number, total: number): string {
-  const x = PATH_WIDTH / 2
-  const y = index * NODE_SPACING + 40
-  const prevY = (index - 1) * NODE_SPACING + 40
+function getNodeX(index: number): number {
+  const center = CANVAS_WIDTH / 2
+  const pattern = index % 3
+  if (pattern === 0) return center - ZIGZAG_OFFSET
+  if (pattern === 1) return center + ZIGZAG_OFFSET
+  return center
+}
 
-  if (index === 0) return `M ${x} ${y}`
+function getNodeY(index: number): number {
+  return index * NODE_SPACING + NODE_SIZE
+}
 
-  const controlOffset = 20
-  const midY = (prevY + y) / 2
+function buildPath(steps: Step[]): string {
+  if (steps.length === 0) return ""
+  const points = steps.map((_, i) => ({
+    x: getNodeX(i) + NODE_SIZE / 2,
+    y: getNodeY(i) + NODE_SIZE / 2,
+  }))
 
-  return `C ${x + controlOffset} ${prevY + controlOffset / 2}, ${x + controlOffset} ${y - controlOffset / 2}, ${x} ${y}`
+  let d = `M ${points[0].x} ${points[0].y}`
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1]
+    const curr = points[i]
+    const midY = (prev.y + curr.y) / 2
+    d += ` C ${prev.x} ${midY}, ${curr.x} ${midY}, ${curr.x} ${curr.y}`
+  }
+  return d
+}
+
+function getPhaseLabel(
+  stepOrder: number,
+  steps: Step[],
+  phases?: Phase[]
+): Phase | undefined {
+  if (!phases || phases.length === 0) return undefined
+  const step = steps.find((s) => s.step_order === stepOrder)
+  if (!step) return undefined
+  return phases.find((p) => p.phase_order === (step.phase ?? 1))
+}
+
+function getActivePhase(steps: Step[], completedStepIds: string[]): number {
+  const phaseNumbers = [...new Set(steps.map((s) => s.phase ?? 1))]
+  if (phaseNumbers.length <= 1) return 1
+  let maxCompleted = 0
+  for (const phase of phaseNumbers) {
+    const phaseSteps = steps.filter((s) => (s.phase ?? 1) === phase)
+    const allDone = phaseSteps.every((s) =>
+      completedStepIds.includes(s.id ?? String(s.step_order))
+    )
+    if (allDone) maxCompleted = phase
+  }
+  return maxCompleted + 1
 }
 
 export function JourneyPath({
@@ -41,74 +85,148 @@ export function JourneyPath({
   phases,
   onBeginStep,
 }: JourneyPathProps) {
-  const totalHeight = steps.length * NODE_SPACING + 80
-
-  const pathD = steps
-    .map((_, i) => generateCurvedPath(i, steps.length))
-    .join(" ")
-
-  const getPhaseForStep = (stepOrder: number): Phase | undefined => {
-    if (!phases || phases.length === 0) return undefined
-    return phases.find((p) => {
-      const phaseSteps = steps.filter((s) => s.phase === p.phase_order)
-      return phaseSteps.some((s) => s.step_order === stepOrder)
-    })
-  }
+  const [selectedStepOrder, setSelectedStepOrder] = useState<number | null>(null)
+  const totalHeight = steps.length * NODE_SPACING + NODE_SIZE * 2
+  const pathD = buildPath(steps)
+  const activePhase = getActivePhase(steps, completedStepIds)
+  const completedCount = completedStepIds.length
+  const totalCount = steps.length
 
   let lastPhase = 0
 
   return (
-    <ScrollView
-      style={styles.container}
-      contentContainerStyle={[styles.scrollContent, { height: totalHeight }]}
-    >
-      <Svg width={PATH_WIDTH} height={totalHeight} style={styles.pathSvg}>
-        <Path
-          d={pathD}
-          stroke={theme.colors.outline}
-          strokeWidth={2}
-          fill="none"
-          strokeDasharray="6,4"
-        />
-      </Svg>
+    <View style={styles.wrapper}>
+      {/* Progress bar */}
+      <View style={styles.progressContainer}>
+        <Text style={styles.progressText}>
+          {completedCount} of {totalCount} steps done
+        </Text>
+        <View style={styles.progressTrack}>
+          <View
+            style={[
+              styles.progressFill,
+              { width: `${(completedCount / totalCount) * 100}%` },
+            ]}
+          />
+        </View>
+      </View>
 
-      <View style={styles.nodesContainer}>
+      <ScrollView
+        style={styles.container}
+        contentContainerStyle={[
+          styles.scrollContent,
+          { height: totalHeight },
+        ]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Path line */}
+        <Svg
+          width={CANVAS_WIDTH}
+          height={totalHeight}
+          style={styles.pathSvg}
+        >
+          <Path
+            d={pathD}
+            stroke={theme.colors.outline}
+            strokeWidth={2}
+            fill="none"
+            strokeDasharray="8,5"
+          />
+        </Svg>
+
+        {/* Nodes */}
         {steps.map((step, index) => {
           const stepId = step.id ?? String(step.step_order)
           const isCompleted = completedStepIds.includes(stepId)
           const isActive = index === currentStepIndex && !isCompleted
-          const isLocked = index > currentStepIndex && !isCompleted
+          const stepPhase = step.phase ?? 1
+          const isPhaseLocked = stepPhase > activePhase
+          const isLocked =
+            (index > currentStepIndex && !isCompleted) || isPhaseLocked
 
-          const phase = getPhaseForStep(step.step_order)
+          const phase = getPhaseLabel(step.step_order, steps, phases)
           const showPhaseMarker = phase && phase.phase_order !== lastPhase
           lastPhase = phase?.phase_order ?? lastPhase
+
+          const nodeX = getNodeX(index)
+          const nodeY = getNodeY(index)
 
           return (
             <View key={step.step_order}>
               {showPhaseMarker && (
-                <Text style={styles.phaseMarker}>
-                  {phase!.phase_label}
-                </Text>
+                <View
+                  style={[
+                    styles.phaseMarkerContainer,
+                    { top: nodeY - 28 },
+                  ]}
+                >
+                  <Text style={styles.phaseMarker}>
+                    {phase!.phase_label}
+                  </Text>
+                </View>
               )}
-              <StepNode
-                stepOrder={step.step_order}
-                title={step.title}
-                instruction={step.instruction}
-                estimatedMinutes={step.estimated_minutes}
-                isActive={isActive}
-                isCompleted={isCompleted}
-                isLocked={isLocked}
-                onBegin={isActive ? onBeginStep : undefined}
-              />
+
+              <View
+                style={[
+                  styles.nodeWrapper,
+                  { left: nodeX, top: nodeY },
+                ]}
+              >
+                <StepNode
+                  stepOrder={step.step_order}
+                  title={step.title}
+                  instruction={step.instruction}
+                  estimatedMinutes={step.estimated_minutes}
+                  isActive={isActive && !isPhaseLocked}
+                  isCompleted={isCompleted}
+                  isLocked={isLocked}
+                  isSelected={selectedStepOrder === step.step_order}
+                  onSelect={() => setSelectedStepOrder(step.step_order)}
+                  onDismiss={() => setSelectedStepOrder(null)}
+                  onBegin={
+                    isActive && !isPhaseLocked
+                      ? () => {
+                        setSelectedStepOrder(null)
+                        onBeginStep()
+                      }
+                      : undefined
+                  }
+                />
+              </View>
             </View>
           )
         })}
-      </View>
-    </ScrollView>
+      </ScrollView>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  wrapper: {
+    flex: 1,
+  },
+  progressContainer: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+  },
+  progressText: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.label.small.fontSize,
+    color: theme.colors.onSurfaceVariant,
+    marginBottom: theme.spacing.xs,
+  },
+  progressTrack: {
+    height: 4,
+    backgroundColor: theme.colors.surfaceContainerHighest,
+    borderRadius: 2,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: 4,
+    backgroundColor: theme.colors.primary,
+    borderRadius: 2,
+  },
   container: {
     flex: 1,
   },
@@ -119,23 +237,26 @@ const styles = StyleSheet.create({
   },
   pathSvg: {
     position: "absolute",
-    top: 0,
+    top: theme.spacing.xl,
     left: theme.spacing.lg,
   },
-  nodesContainer: {
-    position: "relative",
-    zIndex: 1,
+  nodeWrapper: {
+    position: "absolute",
+  },
+  phaseMarkerContainer: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    alignItems: "center",
   },
   phaseMarker: {
     fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.label.medium.fontSize,
+    fontSize: theme.typography.label.small.fontSize,
     fontWeight: theme.typography.weight.semibold,
     color: theme.colors.primary,
     textTransform: "uppercase",
     letterSpacing: 1,
-    paddingVertical: theme.spacing.sm,
-    paddingLeft: 48,
-    marginTop: theme.spacing.md,
-    marginBottom: theme.spacing.xs,
+    backgroundColor: theme.colors.background,
+    paddingHorizontal: theme.spacing.sm,
   },
 })

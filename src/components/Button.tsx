@@ -42,9 +42,9 @@ export function Button({ title, onPress, variant = "primary", disabled, style }:
 
 const styles = StyleSheet.create({
   base: {
-    paddingVertical: theme.spacing.md,
+    paddingVertical: 12,
     paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.md,
+    borderRadius: theme.radius.lg,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -72,6 +72,7 @@ const styles = StyleSheet.create({
   },
   primaryText: {
     color: theme.colors.onPrimary,
+    fontWeight: theme.typography.weight.semibold,
   },
   secondaryText: {
     color: theme.colors.onSecondaryContainer,
