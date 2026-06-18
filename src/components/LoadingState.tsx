@@ -7,32 +7,50 @@ interface LoadingStateProps {
 }
 
 export function LoadingState({ message }: LoadingStateProps) {
-  const opacity = useRef(new Animated.Value(0.3)).current
+  const dot1 = useRef(new Animated.Value(0.3)).current
+  const dot2 = useRef(new Animated.Value(0.3)).current
+  const dot3 = useRef(new Animated.Value(0.3)).current
 
   useEffect(() => {
-    const animation = Animated.loop(
-      Animated.sequence([
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 0.3,
-          duration: 1500,
-          useNativeDriver: true,
-        }),
-      ])
-    )
-    animation.start()
-    return () => animation.stop()
-  }, [opacity])
+    const animate = (dot: Animated.Value, delay: number) =>
+      Animated.loop(
+        Animated.sequence([
+          Animated.delay(delay),
+          Animated.timing(dot, {
+            toValue: 1,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+          Animated.timing(dot, {
+            toValue: 0.3,
+            duration: 600,
+            useNativeDriver: true,
+          }),
+        ])
+      )
+
+    const a1 = animate(dot1, 0)
+    const a2 = animate(dot2, 200)
+    const a3 = animate(dot3, 400)
+
+    a1.start()
+    a2.start()
+    a3.start()
+
+    return () => {
+      a1.stop()
+      a2.stop()
+      a3.stop()
+    }
+  }, [dot1, dot2, dot3])
 
   return (
     <View style={styles.container}>
-      <Animated.View style={[styles.indicator, { opacity }]}>
-        <View style={styles.dot} />
-      </Animated.View>
+      <View style={styles.dots}>
+        <Animated.View style={[styles.dot, { opacity: dot1 }]} />
+        <Animated.View style={[styles.dot, { opacity: dot2 }]} />
+        <Animated.View style={[styles.dot, { opacity: dot3 }]} />
+      </View>
       <Text style={styles.message}>{message}</Text>
     </View>
   )
@@ -45,13 +63,15 @@ const styles = StyleSheet.create({
     alignItems: "center",
     padding: theme.spacing.xl,
   },
-  indicator: {
+  dots: {
+    flexDirection: "row",
+    gap: 8,
     marginBottom: theme.spacing.lg,
   },
   dot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
+    width: 10,
+    height: 10,
+    borderRadius: 5,
     backgroundColor: theme.colors.primary,
   },
   message: {

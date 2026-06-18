@@ -10,6 +10,7 @@ const KEYS = {
   REST_UNTIL: "rest_until",
   HAS_SEEN_SIGN_UP_PROMPT: "has_seen_sign_up_prompt",
   NOTIFICATIONS_ENABLED: "notifications_enabled",
+  HAS_COMPLETED_FIRST_TASK: "has_completed_first_task",
 }
 
 export async function getOnboardingComplete(): Promise<boolean> {
@@ -96,6 +97,15 @@ export async function setHasSeenSignUpPrompt(): Promise<void> {
   await AsyncStorage.setItem(KEYS.HAS_SEEN_SIGN_UP_PROMPT, "true")
 }
 
+export async function getHasCompletedFirstTask(): Promise<boolean> {
+  const val = await AsyncStorage.getItem(KEYS.HAS_COMPLETED_FIRST_TASK)
+  return val === "true"
+}
+
+export async function setHasCompletedFirstTask(): Promise<void> {
+  await AsyncStorage.setItem(KEYS.HAS_COMPLETED_FIRST_TASK, "true")
+}
+
 export async function getNotificationsEnabled(): Promise<boolean> {
   const val = await AsyncStorage.getItem(KEYS.NOTIFICATIONS_ENABLED)
   return val !== "false"
@@ -109,44 +119,64 @@ export async function migrateGuestDataToSupabase(
   userId: string,
   supabaseClient: any
 ): Promise<void> {
-  const [name, task, step, completedIds, mood] = await Promise.all([
+  const [name, task, step, completedIds] = await Promise.all([
     getUserName(),
     getCurrentTask(),
     getCurrentStep(),
     getCompletedStepIds(),
-    getSessionMood(),
   ])
 
-  if (name) {
-    await supabaseClient
-      .from("profiles")
-      .upsert({ id: userId, name })
-  }
+  try {
+    const errors: Error[] = []
 
-  if (task && step) {
-    const { id: taskId, ...taskData } = task as any
-    const { data: newTask } = await supabaseClient
-      .from("tasks")
-      .insert({ ...taskData, user_id: userId })
-      .select("id")
-      .single()
+    if (name) {
+      const { error } = await supabaseClient
+        .from("profiles")
+        .upsert({ id: userId, name })
+      if (error) errors.push(error)
+    }
 
-    if (newTask) {
-      const stepsToInsert = taskData.steps?.map((s: any) => ({
-        task_id: newTask.id,
-        step_order: s.step_order,
-        title: s.title,
-        instruction: s.instruction,
-        estimated_minutes: s.estimated_minutes,
-        phase: s.phase ?? 1,
-        is_completed: completedIds.includes(s.id ?? String(s.step_order)),
-      })) ?? []
+    if (task && step) {
+      const { id: taskId, ...taskData } = task as any
 
-      if (stepsToInsert.length > 0) {
-        await supabaseClient.from("steps").insert(stepsToInsert)
+      const { data: newTask, error: taskError } = await supabaseClient
+        .from("tasks")
+        .insert({ ...taskData, user_id: userId })
+        .select("id")
+        .single()
+
+      if (taskError) {
+        errors.push(taskError)
+      } else if (newTask) {
+        const stepsToInsert = taskData.steps?.map((s: any) => ({
+          task_id: newTask.id,
+          step_order: s.step_order,
+          title: s.title,
+          instruction: s.instruction,
+          estimated_minutes: s.estimated_minutes,
+          phase: s.phase ?? 1,
+          is_completed: completedIds.includes(s.id ?? String(s.step_order)),
+        })) ?? []
+
+        if (stepsToInsert.length > 0) {
+          const { error: stepsError } = await supabaseClient
+            .from("steps")
+            .insert(stepsToInsert)
+          if (stepsError) errors.push(stepsError)
+        }
       }
     }
-  }
 
-  await AsyncStorage.clear()
+    if (errors.length > 0) {
+      throw new Error(
+        `Migration failed: ${errors.map((e) => e.message).join("; ")}`
+      )
+    }
+
+    await AsyncStorage.clear()
+  } catch (error) {
+    console.error("Migration failed, local data preserved:", error)
+    throw error
+  }
 }
+

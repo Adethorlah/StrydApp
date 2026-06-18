@@ -11,14 +11,20 @@ export default function Welcome3() {
         <OnboardIllustration />
       </View>
       <View style={styles.overlay}>
-        <Text style={styles.title}>Progress beats perfection</Text>
-        <Text style={styles.subtext}>Every small step forward is{"\n"}still a win</Text>
-        <Button
-          title="Let's go"
-          onPress={() => router.push("/(onboarding)/name-input")}
-          variant="primary"
-          style={styles.button}
-        />
+        <View style={styles.overlayContent}>
+          <Text style={styles.title}>Progress beats perfection</Text>
+          <Text style={styles.subtext}>Every small step forward is{"\n"}still a win</Text>
+          <Button
+            title="Let's go"
+            onPress={() => router.replace("/(onboarding)/name-input")}
+            variant="primary"
+            style={styles.button}
+          />
+        </View>
+        <View style={styles.dots}>
+          <View style={styles.dot} />
+          <View style={[styles.dot, styles.activeDot]} />
+        </View>
       </View>
     </View>
   )
@@ -33,14 +39,21 @@ const styles = StyleSheet.create({
   overlay: {
     flex: 1,
     justifyContent: "flex-end",
-    paddingBottom: 100,
     alignItems: "center",
     paddingHorizontal: 24,
-    paddingVertical: theme.spacing.xl,
+    paddingBottom: theme.spacing.xl * 2,
+  },
+  overlayContent: {
+    width: "100%",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.65)",
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.md,
   },
   title: {
     fontFamily: theme.typography.fontFamily,
-    fontSize: 32,
+    fontSize: theme.typography.title.fontSize,
+    lineHeight: theme.typography.title.lineHeight,
     fontWeight: "700",
     color: theme.colors.onBackground,
     textAlign: "center",
@@ -49,7 +62,7 @@ const styles = StyleSheet.create({
   subtext: {
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.body.large.fontSize,
-    lineHeight: 32,
+    lineHeight: theme.typography.body.large.lineHeight,
     fontWeight: theme.typography.weight.semibold,
     color: theme.colors.onSurfaceVariant,
     textAlign: "center",
@@ -58,5 +71,21 @@ const styles = StyleSheet.create({
   },
   button: {
     width: "100%",
+  },
+  dots: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: theme.spacing.sm,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.outline,
+  },
+  activeDot: {
+    backgroundColor: theme.colors.onTertiaryContainer,
+    width: 24,
+    borderRadius: 4,
   },
 })

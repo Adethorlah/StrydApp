@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { supabase } from "../lib/supabase"
 import { migrateGuestDataToSupabase } from "../lib/storage"
 import { getOrCreateProfile } from "../lib/supabase-users"
@@ -11,22 +11,37 @@ function stall(ms: number) {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+type PendingAuth = {
+  resolve: (user: User) => void
+  reject: (err: Error) => void
+  timeoutId: ReturnType<typeof setTimeout>
+}
+
 export function useAuth() {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const pendingAuthRef = useRef<PendingAuth | null>(null)
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
       setIsLoading(false)
+    }).catch(() => {
+      setIsLoading(false)
     })
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (_event, session) => {
+      (event, session) => {
         setSession(session)
         setUser(session?.user ?? null)
+
+        if (event === "SIGNED_IN" && session?.user && pendingAuthRef.current) {
+          clearTimeout(pendingAuthRef.current.timeoutId)
+          pendingAuthRef.current.resolve(session.user)
+          pendingAuthRef.current = null
+        }
       }
     )
 
@@ -43,21 +58,32 @@ export function useAuth() {
     })
 
     if (error) throw error
-    if (data?.url) {
-      await WebBrowser.openAuthSessionAsync(data.url, "strydapp://auth/callback")
+    if (!data?.url) throw new Error("No OAuth URL returned")
+
+    const result = await WebBrowser.openAuthSessionAsync(data.url, "strydapp://auth/callback")
+
+    if (result.type === "cancel" || result.type === "dismiss") {
+      throw new Error("Sign in was cancelled")
     }
 
-    // Poll for session after browser closes
-    for (let i = 0; i < 20; i++) {
-      const { data: { session } } = await supabase.auth.getSession()
-      if (session?.user) {
-        setUser(session.user)
-        setSession(session)
-        return session.user
-      }
-      await stall(300)
-    }
-    throw new Error("Session not established after sign in")
+    const authResult = await new Promise<User>((resolve, reject) => {
+      const timeoutId = setTimeout(async () => {
+        for (let i = 0; i < 20; i++) {
+          const { data: { session } } = await supabase.auth.getSession()
+          if (session?.user) {
+            resolve(session.user)
+            return
+          }
+          await stall(300)
+        }
+        pendingAuthRef.current = null
+        reject(new Error("Session not established after sign in"))
+      }, 1500)
+
+      pendingAuthRef.current = { resolve, reject, timeoutId }
+    })
+
+    return authResult
   }, [])
 
   const signInWithEmail = useCallback(async (email: string, password: string) => {

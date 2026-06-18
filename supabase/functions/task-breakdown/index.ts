@@ -109,6 +109,75 @@ async function scanAndRepairText(text: string): Promise<string> {
   return repaired
 }
 
+// --- Category Classifier ---
+
+function classifyTaskCategory(title: string): "creative" | "learning" | "technical" | "administrative" | "general" {
+  const lower = title.toLowerCase()
+
+  const categories: Record<string, string[]> = {
+    creative: [
+      "design", "create", "write", "draw", "paint", "compose",
+      "sketch", "illustrate", "brand", "logo", "campaign", "content",
+      "script", "video", "edit", "strategy", "marketing",
+    ],
+    learning: [
+      "learn", "study", "practice", "understand", "master", "improve",
+      "tutorial", "course", "skill", "instrument", "guitar", "drums",
+      "piano", "language",
+    ],
+    technical: [
+      "code", "program", "debug", "refactor", "migrate", "deploy",
+      "configure", "integrate", "api", "database", "server",
+      "frontend", "backend", "feature", "system", "architecture",
+      "engineer", "implement", "build",
+    ],
+    administrative: [
+      "organize", "clean", "sort", "schedule", "arrange",
+      "prepare", "file", "tidy", "declutter", "pack",
+      "budget", "pay", "bill", "tax", "email", "inbox",
+      "groceries", "shopping", "laundry", "paperwork",
+    ],
+  }
+
+  let bestCategory = "general" as const
+  let bestScore = 0
+
+  for (const [category, words] of Object.entries(categories)) {
+    const score = words.reduce((count, word) => count + (lower.includes(word) ? 1 : 0), 0)
+    if (score > bestScore) {
+      bestScore = score
+      bestCategory = category
+    }
+  }
+
+  return bestCategory as "creative" | "learning" | "technical" | "administrative" | "general"
+}
+
+const CATEGORY_RULES: Record<string, string> = {
+  creative: `Category: Creative, Design, or Strategy (Friction = Infinite Possibilities)
+- First step must force a strict constraint to eliminate blank-canvas paralysis (e.g., defining a single action, constraint, or emotional tone)
+- Focus on hierarchy and decision-making, not asset creation
+- Enforce low-fidelity work before high-fidelity execution`,
+
+  learning: `Category: Learning a Skill or Instrument (Friction = Cognitive Overload)
+- Eliminate "researching" loops — force a single commitment to a resource or method immediately
+- Isolate variables — break the skill into a micro-action (e.g., separating rhythm from speed, or isolating one element)
+- Define a clear, tangible threshold for "done" using metrics like duration, tempo, or consistency`,
+
+  technical: `Category: Technical, Engineering, or Logic (Friction = Dependency Entanglement)
+- Enforce strict linear dependency logic — isolate the core logic before touching peripherals
+- Make the first building step a trivial "happy path" end-to-end test`,
+
+  administrative: `Category: Administrative, Execution, or Sorting (Friction = Low Momentum)
+- Focus on categorization or a high-momentum starting point
+- Use time-boxing constraints rather than output constraints (e.g., "sort for 10 minutes" not "sort the entire room")`,
+
+  general: `Category: General Purpose
+- Focus on the single decision or action that creates the most momentum
+- Eliminate busywork disguised as progress
+- Each step must produce a tangible, verifiable outcome`,
+}
+
 // --- Fallback Steps ---
 
 function generateFallbackSteps(taskTitle: string) {
@@ -118,20 +187,20 @@ function generateFallbackSteps(taskTitle: string) {
     steps: [
       {
         step_order: 1,
-        title: "Get ready to start",
-        instruction: `Clear your space and open everything you need for: ${taskTitle}`,
+        title: "Identify the next action",
+        instruction: `Name the single thing you can do in the next 2 minutes for: ${taskTitle}`,
         estimated_minutes: 2,
       },
       {
         step_order: 2,
-        title: "Do the first small piece",
-        instruction: `Pick the smallest part of "${taskTitle}" and work on just that for 5 minutes`,
+        title: "Complete that action",
+        instruction: `Do it without judging the outcome — just get it done`,
         estimated_minutes: 5,
       },
       {
         step_order: 3,
-        title: "Keep the momentum going",
-        instruction: `Continue with the next part of "${taskTitle}" until you feel done`,
+        title: "Decide what comes next",
+        instruction: `One step is done. Decide whether to continue or stop here. Either is fine.`,
         estimated_minutes: 8,
       },
     ],
@@ -146,7 +215,7 @@ Deno.serve(async (req) => {
   }
 
   try {
-    const { task_title, task_description, mood_score, available_minutes } = await req.json()
+    const { task_title, mood_score, available_minutes } = await req.json()
 
     if (!task_title || mood_score === undefined) {
       return new Response(
@@ -155,65 +224,22 @@ Deno.serve(async (req) => {
       )
     }
 
-    // Step 1: Determine complexity
-    const complexityResponse = await fetch(DEEPSEEK_API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${DEEPSEEK_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "deepseek-chat",
-        messages: [
-          {
-            role: "system",
-            content: `You determine if a task needs a single phase or multiple phases.
+    // Classify the task into a category
+    const category = classifyTaskCategory(task_title)
+    const categoryRules = CATEGORY_RULES[category]
 
-Single-phase indicators:
-- Can be completed in one sitting
-- Has a clear, singular output
-
-Multi-phase indicators:
-- Requires multiple distinct stages of work
-- Output of one stage feeds the next
-- Would feel overwhelming as a flat list
-
-Respond with JSON only: { "is_multi_phase": boolean, "reasoning": "brief explanation" }`,
-          },
-          {
-            role: "user",
-            content: `Task: ${task_title}${task_description ? `\nDescription: ${task_description}` : ""}`,
-          },
-        ],
-        max_tokens: 200,
-        temperature: 0.3,
-        response_format: { type: "json_object" },
-      }),
-    })
-
-    const complexityData = await complexityResponse.json()
-    const complexity = JSON.parse(complexityData.choices?.[0]?.message?.content ?? '{"is_multi_phase": false}')
-
-    // Step 2: Determine step sizing from mood
-    let stepSize: string
-    let firstStepRule: string
-
-    if (mood_score <= 2) {
-      stepSize = "2-3 minutes per step"
-      firstStepRule = "The first step must be trivially easy to start — something the user can do in under 30 seconds."
-    } else if (mood_score === 3) {
-      stepSize = "5-7 minutes per step"
-      firstStepRule = "Standard sizing."
-    } else {
-      stepSize = "up to 10 minutes per step"
-      firstStepRule = "Steps can be more substantial."
-    }
+    // Build mood and time context
+    const energyContext = mood_score <= 2
+      ? "Low — prioritize small wins, minimize cognitive load, keep steps very short"
+      : mood_score >= 4
+      ? "High — ready for substantial work, steps can be more demanding"
+      : "Moderate — standard pacing"
 
     const timeContext = available_minutes
       ? `The user has ${available_minutes} minutes available. Size the steps to fit within this time.`
-      : ""
+      : "Unspecified — size steps for a typical session"
 
-    // Step 3: Generate the path
+    // Step 1: Generate the path (single DeepSeek call — no separate complexity router)
     const pathResponse = await fetch(DEEPSEEK_API_URL, {
       method: "POST",
       headers: {
@@ -225,27 +251,26 @@ Respond with JSON only: { "is_multi_phase": boolean, "reasoning": "brief explana
         messages: [
           {
             role: "system",
-            content: `You generate step-by-step task breakdowns for STRYD, a calm focus app.
+            content: `You are an expert cognitive productivity engine. Your job is to break down a user's goal into 4-6 highly actionable steps designed to eliminate mental friction, executive dysfunction, and procrastination.
 
-STRICT RULES:
-- Every step must be specific to this exact goal — generic steps are a system failure
-- Every step must pass the 30-second start test: the user can begin within 30 seconds of reading it
-- Every step must have a clear definition of done
-- Steps describe scope and outcome only — never tell the user how to use specific tools or software
-- Never reference specific software by name
-- Never tell users how to perform skills they already have
-- Each step must feel like it was written for this exact user and this exact goal
-- Step sizing: ${stepSize}
-- ${firstStepRule}
-- ${timeContext}
+You do not write generic checklists; you act as a strategic thinking partner.
 
-${complexity.is_multi_phase ? `This task needs multiple phases.
-Phase labels must describe purpose, not sequence. Examples:
-- "Get the thinking clear" not "Phase 1"
-- "Build the content" not "Phase 2"
-- "Review and close" not "Phase 4"
+### CRITICAL RULES (THE "ANTI-INSULT" GUARDRAILS)
+1. NO MECHANICAL STEPS: Never include basic tool-setup or obvious physical actions the user already knows how to do. (e.g., Never say "Open Figma," "Create a new document," "Turn on your computer," or "Pick up your drumsticks"). Assume the user is a competent adult who knows how to access their tools.
+2. NO GENERIC FLUFF: Avoid vague, low-value steps that offer no direction. (e.g., Never say "Research competitors," "Practice hard," "Brainstorm ideas," or "Track your progress").
+3. TARGET THE FRICTION: Focus entirely on the exact points where a person's brain gets stuck, paralyzed by options, or distracted. Every step must yield a specific decision, a constraint, or a concrete draft.
 
-Output format (strict JSON only, no markdown, no preamble):
+### DOMAIN-SPECIFIC BEHAVIORAL RULES
+${categoryRules}
+
+### USER CONTEXT
+- Energy level: ${energyContext}
+- Available time: ${timeContext}
+
+### OUTPUT FORMAT (strict JSON only — no markdown, no preamble)
+Determine whether this task needs a single phase (one sitting, clear output) or multiple phases (distinct stages, one feeds the next).
+
+If multi-phase:
 {
   "is_multi_phase": true,
   "total_estimated_minutes": number,
@@ -254,37 +279,30 @@ Output format (strict JSON only, no markdown, no preamble):
       "phase_order": 1,
       "phase_label": "purpose-driven label",
       "steps": [
-        {
-          "step_order": 1,
-          "title": "short action label",
-          "instruction": "one clear sentence describing scope and outcome",
-          "estimated_minutes": number
-        }
+        { "step_order": 1, "title": "short action label", "instruction": "one clear sentence describing scope and outcome", "estimated_minutes": number }
       ]
     }
-  ]
-}` : `This task needs a single phase.
+  ],
+  "steps": []
+}
 
-Output format (strict JSON only, no markdown, no preamble):
+If single-phase:
 {
   "is_multi_phase": false,
   "total_estimated_minutes": number,
   "steps": [
-    {
-      "step_order": 1,
-      "title": "short action label",
-      "instruction": "one clear sentence describing scope and outcome",
-      "estimated_minutes": number
-    }
+    { "step_order": 1, "title": "short action label", "instruction": "one clear sentence describing scope and outcome", "estimated_minutes": number }
   ]
-}`}`,
+}
+
+Phase labels must describe purpose, not sequence (e.g., "Get the thinking clear" not "Phase 1").`,
           },
           {
             role: "user",
-            content: `Task: ${task_title}${task_description ? `\nDescription: ${task_description}` : ""}`,
+            content: `Task: ${task_title}`,
           },
         ],
-        max_tokens: 800,
+        max_tokens: 1000,
         temperature: 0.3,
         response_format: { type: "json_object" },
       }),
@@ -294,7 +312,15 @@ Output format (strict JSON only, no markdown, no preamble):
     const rawContent = pathData.choices?.[0]?.message?.content ?? ""
     const result = JSON.parse(rawContent)
 
-    // Step 4: Run tone safety on every step title and instruction
+    // Normalise: ensure all step arrays exist for the format the client expects
+    if (result.is_multi_phase && result.phases && !result.steps) {
+      result.steps = []
+    }
+    if (!result.is_multi_phase && result.steps && !result.phases) {
+      result.phases = []
+    }
+
+    // Step 2: Run tone safety on every step title and instruction
     if (result.is_multi_phase && result.phases) {
       for (const phase of result.phases) {
         for (const step of phase.steps) {

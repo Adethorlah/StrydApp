@@ -3,6 +3,7 @@ import { router } from "expo-router"
 import { theme } from "../../src/theme/tokens"
 import { Button } from "../../src/components/Button"
 import { OnboardIllustration } from "../../src/components/icons/OnboardIllustration"
+import { setOnboardingComplete } from "../../src/lib/storage"
 
 export default function Welcome2() {
   return (
@@ -12,19 +13,28 @@ export default function Welcome2() {
       </View>
       <TouchableOpacity
         style={styles.skip}
-        onPress={() => router.replace("/(tabs)/home")}
+        onPress={async () => {
+          await setOnboardingComplete()
+          router.replace("/(tabs)/home")
+        }}
       >
         <Text style={styles.skipText}>Skip</Text>
       </TouchableOpacity>
       <View style={styles.overlay}>
-        <Text style={styles.title}>Welcome</Text>
-        <Text style={styles.subtext}>Stryd helps you turn big tasks into small manageable steps</Text>
-        <Button
-          title="That sounds good"
-          onPress={() => router.push("/(onboarding)/welcome-3")}
-          variant="primary"
-          style={styles.button}
-        />
+        <View style={styles.overlayContent}>
+          <Text style={styles.title}>Welcome</Text>
+          <Text style={styles.subtext}>Stryd breaks your goal into small, manageable steps</Text>
+          <Button
+            title="That sounds good"
+            onPress={() => router.replace("/(onboarding)/welcome-3")}
+            variant="primary"
+            style={styles.button}
+          />
+        </View>
+        <View style={styles.dots}>
+          <View style={[styles.dot, styles.activeDot]} />
+          <View style={styles.dot} />
+        </View>
       </View>
     </View>
   )
@@ -41,12 +51,19 @@ const styles = StyleSheet.create({
     justifyContent: "flex-end",
     alignItems: "center",
     paddingHorizontal: 24,
-    paddingVertical: theme.spacing.xl,
-    paddingBottom: 100,
+    paddingBottom: theme.spacing.xl * 2,
+  },
+  overlayContent: {
+    width: "100%",
+    alignItems: "center",
+    backgroundColor: "rgba(255,255,255,0.65)",
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.md,
   },
   title: {
     fontFamily: theme.typography.fontFamily,
-    fontSize: 32,
+    fontSize: theme.typography.title.fontSize,
+    lineHeight: theme.typography.title.lineHeight,
     fontWeight: "700",
     color: theme.colors.onBackground,
     textAlign: "center",
@@ -55,7 +72,7 @@ const styles = StyleSheet.create({
   subtext: {
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.body.large.fontSize,
-    lineHeight: 32,
+    lineHeight: theme.typography.body.large.lineHeight,
     fontWeight: theme.typography.weight.semibold,
     color: theme.colors.onSurfaceVariant,
     textAlign: "center",
@@ -75,5 +92,21 @@ const styles = StyleSheet.create({
   },
   button: {
     width: "100%",
+  },
+  dots: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: theme.spacing.sm,
+  },
+  dot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: theme.colors.outline,
+  },
+  activeDot: {
+    backgroundColor: theme.colors.onTertiaryContainer,
+    width: 24,
+    borderRadius: 4,
   },
 })

@@ -1,7 +1,7 @@
 import { Tabs } from "expo-router"
 import { StyleSheet } from "react-native"
 import { theme } from "../../src/theme/tokens"
-import { HomeIcon, PathIcon, SettingsIcon } from "../../src/components/icons"
+import { HomeIcon, PathIcon, ProfileIcon } from "../../src/components/icons"
 
 function TabIcon({
   icon: Icon,
@@ -45,10 +45,10 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="settings"
+        name="profile"
         options={{
-          title: "Settings",
-          tabBarIcon: ({ focused }) => <TabIcon icon={SettingsIcon} focused={focused} />,
+          title: "Profile",
+          tabBarIcon: ({ focused }) => <TabIcon icon={ProfileIcon} focused={focused} />,
         }}
       />
     </Tabs>

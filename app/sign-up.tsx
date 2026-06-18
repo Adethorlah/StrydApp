@@ -1,6 +1,6 @@
 import { useState, useCallback } from "react"
 import { View, Text, StyleSheet, KeyboardAvoidingView, Platform } from "react-native"
-import { router } from "expo-router"
+import { router, useLocalSearchParams } from "expo-router"
 import { theme } from "../src/theme/tokens"
 import { StyledInput } from "../src/components/TextInput"
 import { Button } from "../src/components/Button"
@@ -10,6 +10,8 @@ import { useAuth } from "../src/hooks/useAuth"
 export default function SignUp() {
   const { userName } = useOnboarding()
   const { signInWithGoogle, signUpWithEmail, signInWithEmail, migrateWithUser } = useAuth()
+  const { required } = useLocalSearchParams<{ required?: string }>()
+  const isRequired = required === "true"
 
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
@@ -20,13 +22,14 @@ export default function SignUp() {
   const handleGoogleSignUp = useCallback(async () => {
     try {
       setIsSubmitting(true)
+      setError("")
       const user = await signInWithGoogle()
       if (user) {
         await migrateWithUser(user)
       }
       router.back()
-    } catch {
-      // Silent failure
+    } catch (e: any) {
+      setError(e?.message ?? "Something went wrong. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
@@ -99,22 +102,25 @@ export default function SignUp() {
       ) : (
         <View style={styles.form}>
           <Button
-            title="Save my progress"
+            title={isSubmitting ? "Saving..." : "Save my progress"}
             onPress={handleGoogleSignUp}
             variant="primary"
             disabled={isSubmitting}
             style={styles.googleButton}
           />
+          {error ? <Text style={styles.errorText}>{error}</Text> : null}
           <Button
             title="Use email instead"
             onPress={() => setIsEmailMode(true)}
             variant="link"
           />
-          <Button
-            title="Not now"
-            onPress={() => router.back()}
-            variant="quiet"
-          />
+          {!isRequired ? (
+            <Button
+              title="Not now"
+              onPress={() => router.back()}
+              variant="quiet"
+            />
+          ) : null}
         </View>
       )}
     </KeyboardAvoidingView>

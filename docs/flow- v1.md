@@ -144,9 +144,9 @@ The AI asks what the user wants to accomplish.
    - AI message: "Building your path..."
    - Soft ambient animated indicator — no spinner, no clock
    - If processing exceeds 10 seconds: "Still thinking... your goal is a good one."
-   - If processing exceeds 20 seconds: Edge Function assumed unreachable → local fallback steps generated on device (see Section 15)
-   - No error messages shown to user under any circumstance
-4. On completion → navigate to Journey tab (Journey Path screen)
+   - If processing exceeds 20 seconds: "Almost there..."
+4. On success → navigate to Journey tab (Journey Path screen)
+5. On failure after 3 retries → show clear error message with retry option. Never stay in loading state.
 
 ### State B — Active Task Exists (Returning Visit)
 
@@ -546,33 +546,14 @@ Focus timer uses ambient fill animation only. No clock, no countdown, no numbers
 ### Companion Pulse Threshold
 The companion bubble pulses when the user has spent 2x the estimated step time on the current step. Example: step estimated at 5 minutes → pulse triggers at 10 minutes. This is calculated client-side using a timer started when the step is first opened.
 
-### Local Fallback Steps
-Client must contain a deterministic fallback function that generates 3 calm steps when the Edge Function is unreachable. This function runs entirely offline with no API calls. It uses the task title from local state only.
+### Task Breakdown Error Handling
+When the Edge Function is unreachable or returns invalid data, the client retries up to 3 times with 3-second intervals. After all retries fail:
+- Loading state stops immediately — never hangs indefinitely
+- A clear error message is shown to the user
+- The user can retry by tapping the button again
+- Generic offline fallback steps are NOT used — they do not match the user's goal
 
-```typescript
-function generateLocalFallback(task_title: string) {
-  return [
-    {
-      step_order: 1,
-      title: `Open ${task_title}`,
-      instruction: `Open whatever you need to work on for ${task_title}`,
-      estimated_minutes: 2,
-    },
-    {
-      step_order: 2,
-      title: "Do the first thing",
-      instruction: "Do the smallest possible first action you can think of",
-      estimated_minutes: 5,
-    },
-    {
-      step_order: 3,
-      title: "Keep going",
-      instruction: "Do the next obvious thing from where you are",
-      estimated_minutes: 5,
-    },
-  ]
-}
-```
+The AI response is validated before use. Steps must contain `title` (string), `instruction` (string), and `estimated_minutes` (number). Invalid responses are treated as failures and retried.
 
 ### Google Auth
 - Implemented via Supabase Auth (Google OAuth)

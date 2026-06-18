@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react"
-import { getOnboardingComplete, setOnboardingComplete, getUserName, setUserName } from "../lib/storage"
+import { getOnboardingComplete, getUserName, setUserName } from "../lib/storage"
 
 export function useOnboarding() {
   const [isComplete, setIsComplete] = useState<boolean | null>(null)
@@ -14,17 +14,10 @@ export function useOnboarding() {
     )
   }, [])
 
-  const completeOnboarding = useCallback(async (name: string) => {
-    await setUserName(name)
-    await setOnboardingComplete()
-    setUserNameState(name)
-    setIsComplete(true)
-  }, [])
-
   const updateName = useCallback(async (name: string) => {
     await setUserName(name)
     setUserNameState(name)
   }, [])
 
-  return { isComplete, userName, completeOnboarding, updateName }
+  return { isComplete, userName, updateName }
 }

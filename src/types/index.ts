@@ -19,19 +19,6 @@ export interface Task {
     is_completed?: boolean
 }
 
-export interface FallbackStep {
-    step_order: number
-    title: string
-    instruction: string
-    estimated_minutes: number
-}
-
-export interface FallbackResult {
-    is_multi_phase: false
-    total_estimated_minutes: number
-    steps: FallbackStep[]
-}
-
 export interface CompanionContext {
     userName: string
     currentTask?: string
@@ -40,6 +27,16 @@ export interface CompanionContext {
     moodScore?: number
     completedSteps: number
     totalSteps: number
+}
+
+export interface InboxMessage {
+    id: string
+    user_id: string
+    title: string
+    content: string
+    category: "insight" | "re_entry" | "milestone"
+    is_read: boolean
+    created_at: string
 }
 
 export interface IconProps {

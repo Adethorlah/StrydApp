@@ -1,3 +1,4 @@
 export { HomeIcon } from "./HomeIcon"
 export { PathIcon } from "./PathIcon"
-export { SettingsIcon } from "./SettingsIcon"
+export { ProfileIcon } from "./ProfileIcon"
+export { ChevronLeft } from "./ChevronLeft"

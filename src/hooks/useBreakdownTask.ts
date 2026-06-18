@@ -1,12 +1,30 @@
 import { useState, useCallback, useRef } from "react"
-import { generateLocalFallback } from "../lib/localFallback"
-import { FallbackResult } from "../types"
 import { callTaskBreakdown } from "../lib/supabase-tasks"
 
 interface BreakdownState {
   status: "idle" | "loading" | "building" | "thinking" | "almost_there" | "done" | "error"
   message: string
-  result: FallbackResult | null
+  result: any | null
+}
+
+function validateBreakdownResponse(data: any): boolean {
+  if (!data || typeof data !== "object") return false
+
+  const hasValidSteps = (steps: any[]) =>
+    Array.isArray(steps) &&
+    steps.length > 0 &&
+    steps.every(
+      (s) =>
+        typeof s?.title === "string" &&
+        typeof s?.instruction === "string" &&
+        typeof s?.estimated_minutes === "number"
+    )
+
+  if (data.is_multi_phase && Array.isArray(data.phases)) {
+    return data.phases.length > 0 && data.phases.every((p: any) => hasValidSteps(p.steps))
+  }
+
+  return hasValidSteps(data.steps)
 }
 
 export function useBreakdownTask() {
@@ -19,16 +37,16 @@ export function useBreakdownTask() {
   const abortRef = useRef(false)
 
   const breakDown = useCallback(
-    async (taskTitle: string, moodScore: number, availableMinutes: number): Promise<FallbackResult> => {
+    async (taskTitle: string, moodScore: number, availableMinutes: number): Promise<any> => {
       abortRef.current = false
       setState({ status: "loading", message: "Building your path...", result: null })
 
-      // First attempt
+      // Attempt 1
       try {
         setState({ status: "building", message: "Building your path...", result: null })
         const data = await callTaskBreakdown(taskTitle, moodScore, availableMinutes)
-        console.log("Breakdown response:", JSON.stringify(data))
-        if (data) {
+
+        if (data && validateBreakdownResponse(data)) {
           setState({ status: "done", message: "", result: data })
           return data
         }
@@ -36,20 +54,16 @@ export function useBreakdownTask() {
         console.log("Breakdown error:", e)
       }
 
-      if (abortRef.current) {
-        const fallback = generateLocalFallback(taskTitle)
-        setState({ status: "done", message: "", result: fallback })
-        return fallback
-      }
+      if (abortRef.current) throw new Error("Task creation cancelled")
 
-      // Wait 3 seconds then retry
+      // Attempt 2 (after 3s wait)
       setState({ status: "thinking", message: "Still thinking... your goal is a good one.", result: null })
       await new Promise((r) => setTimeout(r, 3000))
 
       try {
         const data = await callTaskBreakdown(taskTitle, moodScore, availableMinutes)
-        console.log("Breakdown retry 2 response:", JSON.stringify(data))
-        if (data) {
+
+        if (data && validateBreakdownResponse(data)) {
           setState({ status: "done", message: "", result: data })
           return data
         }
@@ -57,20 +71,16 @@ export function useBreakdownTask() {
         console.log("Breakdown retry 2 error:", e)
       }
 
-      if (abortRef.current) {
-        const fallback = generateLocalFallback(taskTitle)
-        setState({ status: "done", message: "", result: fallback })
-        return fallback
-      }
+      if (abortRef.current) throw new Error("Task creation cancelled")
 
-      // Wait 3 more seconds then final attempt
+      // Attempt 3 (after 3s wait)
       setState({ status: "almost_there", message: "Almost there...", result: null })
       await new Promise((r) => setTimeout(r, 3000))
 
       try {
         const data = await callTaskBreakdown(taskTitle, moodScore, availableMinutes)
-        console.log("Breakdown retry 3 response:", JSON.stringify(data))
-        if (data) {
+
+        if (data && validateBreakdownResponse(data)) {
           setState({ status: "done", message: "", result: data })
           return data
         }
@@ -78,11 +88,10 @@ export function useBreakdownTask() {
         console.log("Breakdown retry 3 error:", e)
       }
 
-      // All attempts failed — use local fallback
-      console.log("All attempts failed, using local fallback")
-      const fallback = generateLocalFallback(taskTitle)
-      setState({ status: "done", message: "", result: fallback })
-      return fallback
+      // All attempts failed
+      const errorMsg = "Could not break down your goal. Please check your connection and try again."
+      setState({ status: "error", message: errorMsg, result: null })
+      throw new Error(errorMsg)
     },
     []
   )

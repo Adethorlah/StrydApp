@@ -1,22 +1,27 @@
-import { Dimensions, StyleSheet, View } from "react-native"
-import Svg, { Rect, Image as SvgImage } from "react-native-svg"
-
-const { width: W, height: H } = Dimensions.get("window")
+import { useState, useEffect } from "react"
+import { Dimensions, StyleSheet, View, Image } from "react-native"
+import Svg, { Rect } from "react-native-svg"
 
 export function OnboardIllustration() {
+  const [dims, setDims] = useState(() => Dimensions.get("window"))
+
+  useEffect(() => {
+    const sub = Dimensions.addEventListener("change", ({ window }) => setDims(window))
+    return () => sub.remove()
+  }, [])
+
+  const { width: W, height: H } = dims
+
   return (
     <View style={StyleSheet.absoluteFill}>
-      <Svg width={W} height={H} viewBox="0 0 419 504" preserveAspectRatio="xMidYMid slice">
-        <SvgImage
-          x="0"
-          y="0"
-          width="418.429"
-          height="503.388"
-          href={require("../../assets/images/onboard-1.png")}
-          opacity={0.65}
-        />
-        <Rect x="130" y="130" width="70" height="70" rx="35" fill="#ceddf1" />
-        <Rect x="60" y="180" width="50" height="50" rx="25" fill="#ecf1f9" />
+      <Image
+        source={require("../../assets/images/onboard-1.png")}
+        style={{ width: W, height: H, opacity: 0.65, position: "absolute" }}
+        resizeMode="cover"
+      />
+      <Svg width={W} height={H} viewBox="0 0 419 504" preserveAspectRatio="xMidYMid slice" style={StyleSheet.absoluteFill}>
+        <Rect x="141" y="141" width="46" height="46" rx="23" fill="#C7D5EF" />
+        <Rect x="62" y="180" width="46" height="46" rx="23" fill="#E3E9F6" />
       </Svg>
     </View>
   )

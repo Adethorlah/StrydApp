@@ -9,6 +9,7 @@ import {
   Modal,
   ScrollView,
 } from "react-native"
+import { Feather } from "@expo/vector-icons"
 import { theme } from "../theme/tokens"
 
 interface StepNodeProps {
@@ -26,6 +27,13 @@ interface StepNodeProps {
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window")
+
+const COLORS = {
+  green: theme.colors.success,
+  grey: theme.colors.outline,
+  lightGrey: theme.colors.surfaceContainerHighest,
+  iconGrey: theme.colors.onSurfaceVariant,
+}
 
 export function StepNode({
   stepOrder,
@@ -79,18 +87,24 @@ export function StepNode({
     }
   }, [isActive])
 
-  const getNodeStyle = () => {
-    if (isCompleted) return [styles.node, styles.completedNode]
-    if (isActive) return [styles.node, styles.activeNode]
-    if (isLocked) return [styles.node, styles.lockedNode]
-    return [styles.node, styles.upcomingNode]
-  }
+  const outerColor = isCompleted ? COLORS.green : COLORS.grey
+  const innerColor = isCompleted ? COLORS.green : COLORS.grey
+  const centerColor = isCompleted
+    ? COLORS.green
+    : isActive
+      ? theme.colors.secondary
+      : COLORS.lightGrey
 
-  const renderNodeContent = () => {
-    if (isCompleted) return <Text style={styles.checkmark}>✓</Text>
-    if (isLocked) return <Text style={styles.lockIcon}>🔒</Text>
-    if (isActive) return <Text style={styles.playIcon}>▶</Text>
-    return <Text style={styles.stepNumberText}>{stepOrder}</Text>
+  const renderIcon = () => {
+    if (isCompleted) {
+      return <Feather name="check" size={18} color="#fff" strokeWidth={3} />
+    }
+    if (isActive) {
+      return (
+        <Text style={styles.stepNumberText}>{stepOrder}</Text>
+      )
+    }
+    return <Feather name="lock" size={16} color={COLORS.iconGrey} />
   }
 
   const isDisabled = isLocked || (!isActive && !isCompleted)
@@ -104,11 +118,32 @@ export function StepNode({
       >
         <Animated.View
           style={[
-            getNodeStyle(),
             isActive && { transform: [{ scale: pulseAnim }] },
           ]}
         >
-          {renderNodeContent()}
+          <View
+            style={[
+              styles.outerRing,
+              { borderColor: outerColor },
+            ]}
+          >
+            <View
+              style={[
+                styles.innerRing,
+                { borderColor: innerColor },
+              ]}
+            >
+              <View
+                style={[
+                  styles.centerCircle,
+                  { backgroundColor: centerColor },
+                  (isCompleted || isActive) && styles.centerShadow,
+                ]}
+              >
+                {renderIcon()}
+              </View>
+            </View>
+          </View>
         </Animated.View>
       </TouchableOpacity>
 
@@ -143,6 +178,9 @@ export function StepNode({
                 style={styles.sheetScroll}
                 showsVerticalScrollIndicator={false}
               >
+                {/* Title */}
+                <Text style={styles.sheetTitle}>{title}</Text>
+
                 {/* Step number badge */}
                 <View style={styles.stepBadge}>
                   <Text style={styles.stepBadgeText}>
@@ -150,9 +188,6 @@ export function StepNode({
                     {estimatedMinutes ? ` · ${estimatedMinutes} min` : ""}
                   </Text>
                 </View>
-
-                {/* Title */}
-                <Text style={styles.sheetTitle}>{title}</Text>
 
                 {/* Instruction */}
                 {instruction && (
@@ -167,7 +202,7 @@ export function StepNode({
                     activeOpacity={0.85}
                   >
                     <Text style={styles.beginButtonText}>
-                      I'm ready — let's go
+                      Begin this step
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -192,57 +227,40 @@ export function StepNode({
 }
 
 const styles = StyleSheet.create({
-  // --- Node ---
-  node: {
-    width: 56,
-    height: 56,
-    borderRadius: 16,
+  outerRing: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    borderWidth: 2,
     alignItems: "center",
     justifyContent: "center",
+  },
+  innerRing: {
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    borderWidth: 2,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  centerCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  centerShadow: {
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
     elevation: 3,
   },
-  activeNode: {
-    width: 64,
-    height: 64,
-    borderRadius: 18,
-    backgroundColor: theme.colors.primary,
-  },
-  completedNode: {
-    backgroundColor: theme.colors.success ?? "#4CAF50",
-    opacity: 0.85,
-  },
-  upcomingNode: {
-    backgroundColor: theme.colors.surfaceContainerHighest,
-    borderWidth: 2,
-    borderColor: theme.colors.outline,
-  },
-  lockedNode: {
-    backgroundColor: theme.colors.surfaceContainerHighest,
-    opacity: 0.4,
-  },
-
-  // --- Node content ---
-  checkmark: {
-    fontSize: 22,
-    color: "#fff",
-    fontWeight: "700",
-  },
-  lockIcon: {
-    fontSize: 18,
-  },
-  playIcon: {
-    fontSize: 20,
-    color: "#fff",
-    marginLeft: 3,
-  },
   stepNumberText: {
     fontSize: 16,
-    fontWeight: "600",
-    color: theme.colors.onSurfaceVariant,
+    fontWeight: "700",
+    color: COLORS.iconGrey,
     fontFamily: theme.typography.fontFamily,
   },
 
@@ -257,11 +275,11 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: 24,
     borderTopRightRadius: 24,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.sm,
+    paddingTop: theme.spacing.lg,
     maxHeight: SCREEN_HEIGHT * 0.75,
   },
   sheetScroll: {
-    paddingTop: theme.spacing.sm,
+    paddingTop: theme.spacing.md,
   },
   handle: {
     width: 40,
@@ -269,21 +287,21 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     backgroundColor: theme.colors.outline,
     alignSelf: "center",
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
   },
   backButton: {
     paddingVertical: theme.spacing.sm,
-    marginBottom: theme.spacing.xs,
+    marginBottom: theme.spacing.sm,
   },
   backText: {
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.body.medium.fontSize,
-    color: theme.colors.primary,
+    color: theme.colors.onSurfaceVariant,
     fontWeight: theme.typography.weight.medium,
   },
   stepBadge: {
     alignSelf: "flex-start",
-    backgroundColor: theme.colors.primaryContainer ?? theme.colors.surfaceContainerLow,
+    backgroundColor: theme.colors.surfaceContainerLow,
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.xs,
     borderRadius: theme.radius.full,
@@ -292,7 +310,7 @@ const styles = StyleSheet.create({
   stepBadgeText: {
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.label.small.fontSize,
-    color: theme.colors.primary,
+    color: theme.colors.onSurfaceVariant,
     fontWeight: theme.typography.weight.semibold,
   },
   sheetTitle: {
@@ -301,7 +319,7 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.title.lineHeight,
     fontWeight: theme.typography.weight.semibold,
     color: theme.colors.onSurface,
-    marginBottom: theme.spacing.md,
+    marginBottom: theme.spacing.lg,
   },
   sheetInstruction: {
     fontFamily: theme.typography.fontFamily,
@@ -311,7 +329,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
   },
   beginButton: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.secondary,
     borderRadius: theme.radius.lg,
     paddingVertical: theme.spacing.md,
     alignItems: "center",
@@ -321,7 +339,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.body.large.fontSize,
     fontWeight: theme.typography.weight.semibold,
-    color: theme.colors.onPrimary,
+    color: theme.colors.onSecondary,
   },
   completedBanner: {
     backgroundColor: theme.colors.surfaceContainerLow,

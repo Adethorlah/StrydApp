@@ -11,9 +11,10 @@ import {
   Dimensions,
   ScrollView,
 } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { theme } from "../theme/tokens"
 import { AiChatBubble } from "./AiChatBubble"
-import { useCompanionChat } from "../hooks/useCompanionChat"
+import { useChat } from "../contexts/ChatContext"
 import { CompanionContext } from "../types"
 
 interface CompanionProps {
@@ -27,15 +28,23 @@ interface CompanionProps {
 const { height: SCREEN_HEIGHT } = Dimensions.get("window")
 const PANEL_HEIGHT = SCREEN_HEIGHT * 0.65
 
-export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear, startOpen }: CompanionProps) {
+export function AiCompanion({
+  context,
+  isVisible,
+  shouldPulse,
+  onPulseClear,
+  startOpen,
+}: CompanionProps) {
+  const insets = useSafeAreaInsets()
   const [isOpen, setIsOpen] = useState(false)
   const [inputText, setInputText] = useState("")
   const slideAnim = useRef(new Animated.Value(PANEL_HEIGHT)).current
   const pulseAnim = useRef(new Animated.Value(1)).current
   const inputRef = useRef<TextInput>(null)
+  const scrollRef = useRef<ScrollView>(null)
   const hasSentIntro = useRef(false)
 
-  const { messages, isLoading, sendMessage, initWithGreeting } = useCompanionChat(context)
+  const { messages, isLoading, sendMessage, initWithGreeting } = useChat()
 
   useEffect(() => {
     if (startOpen) openPanel()
@@ -61,6 +70,14 @@ export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear, sta
     }
   }, [shouldPulse, pulseAnim])
 
+  useEffect(() => {
+    if (messages.length > 0) {
+      setTimeout(() => {
+        scrollRef.current?.scrollToEnd({ animated: true })
+      }, 100)
+    }
+  }, [messages])
+
   const openPanel = useCallback(() => {
     setIsOpen(true)
     Animated.timing(slideAnim, {
@@ -69,13 +86,13 @@ export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear, sta
       useNativeDriver: true,
     }).start()
 
-    if (!hasSentIntro.current && context.userName) {
+    if (!hasSentIntro.current && context.userName && messages.length === 0) {
       initWithGreeting(context.userName)
       hasSentIntro.current = true
     }
 
     if (onPulseClear) onPulseClear()
-  }, [slideAnim, context.userName, onPulseClear, initWithGreeting])
+  }, [slideAnim, context.userName, onPulseClear, initWithGreeting, messages.length])
 
   const closePanel = useCallback(() => {
     Animated.timing(slideAnim, {
@@ -89,8 +106,8 @@ export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear, sta
     if (!inputText.trim() || isLoading) return
     const message = inputText.trim()
     setInputText("")
-    await sendMessage(message)
-  }, [inputText, isLoading, sendMessage])
+    await sendMessage(message, context)
+  }, [inputText, isLoading, sendMessage, context])
 
   if (!isVisible) return null
 
@@ -115,12 +132,12 @@ export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear, sta
           onPress={closePanel}
         >
           <KeyboardAvoidingView
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
+            behavior={Platform.OS === "ios" ? "padding" : undefined}
             style={styles.keyboardView}
           >
             <TouchableOpacity
               activeOpacity={1}
-              onPress={() => { }}
+              onPress={() => {}}
               style={styles.panel}
             >
               <Animated.View
@@ -129,8 +146,23 @@ export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear, sta
                   { transform: [{ translateY: slideAnim }] },
                 ]}
               >
-                <View style={styles.handle} />
-                <ScrollView style={styles.chatArea}>
+                {/* Handle + close X */}
+                <View style={styles.topBar}>
+                  <View style={styles.handle} />
+                  <TouchableOpacity onPress={closePanel} style={styles.closeButton}>
+                    <View style={styles.closeCircle}>
+                      <Text style={styles.closeText}>✕</Text>
+                    </View>
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                  ref={scrollRef}
+                  style={styles.chatArea}
+                  contentContainerStyle={styles.chatContent}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
                   {messages.map((msg, i) => (
                     <AiChatBubble
                       key={i}
@@ -142,7 +174,11 @@ export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear, sta
                     <Text style={styles.loadingText}>Thinking...</Text>
                   )}
                 </ScrollView>
-                <View style={styles.inputRow}>
+
+                <View style={[
+                  styles.inputRow,
+                  { paddingBottom: Math.max(insets.bottom, 16) }
+                ]}>
                   <TextInput
                     ref={inputRef}
                     value={inputText}
@@ -152,10 +188,14 @@ export function AiCompanion({ context, isVisible, shouldPulse, onPulseClear, sta
                     style={styles.input}
                     onSubmitEditing={handleSend}
                     returnKeyType="send"
+                    blurOnSubmit={false}
                   />
                   <TouchableOpacity
                     onPress={handleSend}
-                    style={styles.sendButton}
+                    style={[
+                      styles.sendButton,
+                      (!inputText.trim() || isLoading) && styles.sendButtonDisabled,
+                    ]}
                     disabled={!inputText.trim() || isLoading}
                   >
                     <Text style={styles.sendText}>Send</Text>
@@ -218,25 +258,54 @@ const styles = StyleSheet.create({
     borderTopRightRadius: theme.radius.xl,
     paddingTop: theme.spacing.sm,
   },
+  topBar: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    position: "relative",
+  },
   handle: {
     width: 40,
     height: 4,
     borderRadius: 2,
     backgroundColor: theme.colors.outline,
-    alignSelf: "center",
-    marginBottom: theme.spacing.md,
+  },
+  closeButton: {
+    position: "absolute",
+    right: theme.spacing.md,
+    padding: theme.spacing.xs,
+  },
+  closeCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.colors.surfaceContainerHighest,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  closeText: {
+    fontSize: 14,
+    fontWeight: theme.typography.weight.semibold,
+    color: theme.colors.onSurfaceVariant,
   },
   chatArea: {
     flex: 1,
     paddingHorizontal: theme.spacing.md,
   },
+  chatContent: {
+    paddingVertical: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
   inputRow: {
     flexDirection: "row",
     alignItems: "center",
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    paddingTop: theme.spacing.sm,
     borderTopWidth: 1,
     borderTopColor: theme.colors.outlineVariant,
+    gap: theme.spacing.sm,
   },
   input: {
     flex: 1,
@@ -247,11 +316,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     backgroundColor: theme.colors.surfaceContainerHighest,
     borderRadius: theme.radius.full,
-    marginRight: theme.spacing.sm,
+    outlineStyle: "none",
   },
   sendButton: {
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
+  },
+  sendButtonDisabled: {
+    opacity: 0.4,
   },
   sendText: {
     fontFamily: theme.typography.fontFamily,

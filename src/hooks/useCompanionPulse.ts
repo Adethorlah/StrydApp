@@ -1,8 +1,9 @@
+import { AppState } from "react-native"
 import { useState, useEffect, useRef, useCallback } from "react"
 
 export function useCompanionPulse(estimatedMinutes: number | null) {
   const [shouldPulse, setShouldPulse] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
   const startTimeRef = useRef<number | null>(null)
 
   useEffect(() => {
@@ -21,10 +22,26 @@ export function useCompanionPulse(estimatedMinutes: number | null) {
       }
     }
 
-    timerRef.current = setInterval(checkPulse, 10000)
+    const startInterval = () => {
+      timerRef.current = setInterval(checkPulse, 10000)
+    }
+
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") startInterval()
+      else if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
+    })
+
+    startInterval()
 
     return () => {
-      if (timerRef.current) clearInterval(timerRef.current)
+      subscription.remove()
+      if (timerRef.current) {
+        clearInterval(timerRef.current)
+        timerRef.current = null
+      }
     }
   }, [estimatedMinutes])
 

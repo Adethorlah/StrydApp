@@ -57,6 +57,25 @@ export function useTaskState() {
     }
   }, [currentTask, currentStepIndex])
 
+  const reloadFromStorage = useCallback(async () => {
+    const [task, step, completed] = await Promise.all([
+      getCurrentTask(),
+      getCurrentStep(),
+      getCompletedStepIds(),
+    ])
+    if (task) {
+      setCurrentTaskState(task as Task)
+      if (step) {
+        const idx = (task as Task).steps.findIndex((s) => s.step_order === (step as Step).step_order)
+        setCurrentStepIndex(idx >= 0 ? idx : 0)
+      }
+    } else {
+      setCurrentTaskState(null)
+      setCurrentStepIndex(0)
+    }
+    setCompletedStepIdsState(completed)
+  }, [])
+
   const clearTask = useCallback(async () => {
     await clearCurrentTask()
     setCurrentTaskState(null)
@@ -79,5 +98,6 @@ export function useTaskState() {
     startNewTask,
     completeStepAndAdvance,
     clearTask,
+    reloadFromStorage,
   }
 }

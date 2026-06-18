@@ -19,9 +19,9 @@ interface JourneyPathProps {
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window")
-const CANVAS_WIDTH = SCREEN_WIDTH - theme.spacing.xl * 2
+const CANVAS_WIDTH = SCREEN_WIDTH - theme.spacing.lg * 2
 const NODE_SIZE = 64
-const NODE_SPACING = 100
+const NODE_SPACING = 90
 const ZIGZAG_OFFSET = CANVAS_WIDTH * 0.28
 
 function getNodeX(index: number): number {
@@ -98,9 +98,6 @@ export function JourneyPath({
     <View style={styles.wrapper}>
       {/* Progress bar */}
       <View style={styles.progressContainer}>
-        <Text style={styles.progressText}>
-          {completedCount} of {totalCount} steps done
-        </Text>
         <View style={styles.progressTrack}>
           <View
             style={[
@@ -109,6 +106,9 @@ export function JourneyPath({
             ]}
           />
         </View>
+        <Text style={styles.progressText}>
+          {completedCount} of {totalCount} steps done
+        </Text>
       </View>
 
       <ScrollView
@@ -127,10 +127,9 @@ export function JourneyPath({
         >
           <Path
             d={pathD}
-            stroke={theme.colors.outline}
-            strokeWidth={2}
+            stroke={theme.colors.outlineVariant}
+            strokeWidth={3}
             fill="none"
-            strokeDasharray="8,5"
           />
         </Svg>
 
@@ -212,9 +211,9 @@ const styles = StyleSheet.create({
   },
   progressText: {
     fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.label.small.fontSize,
+    fontSize: 12,
     color: theme.colors.onSurfaceVariant,
-    marginBottom: theme.spacing.xs,
+    marginTop: theme.spacing.xs,
   },
   progressTrack: {
     height: 4,
@@ -224,7 +223,7 @@ const styles = StyleSheet.create({
   },
   progressFill: {
     height: 4,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: theme.colors.success,
     borderRadius: 2,
   },
   container: {
@@ -238,7 +237,7 @@ const styles = StyleSheet.create({
   pathSvg: {
     position: "absolute",
     top: theme.spacing.xl,
-    left: theme.spacing.lg,
+    left: 0,
   },
   nodeWrapper: {
     position: "absolute",
@@ -253,7 +252,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.label.small.fontSize,
     fontWeight: theme.typography.weight.semibold,
-    color: theme.colors.primary,
+    color: theme.colors.onSurfaceVariant,
     textTransform: "uppercase",
     letterSpacing: 1,
     backgroundColor: theme.colors.background,
