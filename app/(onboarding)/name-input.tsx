@@ -142,7 +142,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontFamily: theme.typography.fontFamily,
-    fontSize: 28,
+    fontSize: 25,
     lineHeight: 36,
     fontWeight: "700",
     color: theme.colors.onBackground,

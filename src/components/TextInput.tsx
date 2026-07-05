@@ -5,6 +5,8 @@ import {
   TextInputProps,
   View,
   Platform,
+  NativeSyntheticEvent,
+  TextInputContentSizeChangeEventData,
 } from "react-native"
 import { theme } from "../theme/tokens"
 
@@ -16,7 +18,7 @@ interface StyledInputProps extends TextInputProps {
 export function StyledInput({ variant = "standard", style, inputStyle, multiline, onContentSizeChange, ...props }: StyledInputProps) {
   const [inputHeight, setInputHeight] = useState<number | undefined>(undefined)
 
-  const handleContentSizeChange = useCallback((e: any) => {
+  const handleContentSizeChange = useCallback((e: NativeSyntheticEvent<TextInputContentSizeChangeEventData>) => {
     if (multiline) {
       const newHeight = e.nativeEvent.contentSize.height
       setInputHeight(newHeight)
@@ -51,12 +53,17 @@ export function StyledInput({ variant = "standard", style, inputStyle, multiline
 
 const styles = StyleSheet.create({
   container: {
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: theme.colors.outline,
-    borderRadius: theme.radius.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    backgroundColor: theme.colors.surfaceContainerLow,
+    borderRadius: theme.radius.lg,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
+    backgroundColor: theme.colors.surface,
+    shadowColor: theme.colors.outline,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 2,
   },
   largeContainer: {
     paddingVertical: theme.spacing.md,

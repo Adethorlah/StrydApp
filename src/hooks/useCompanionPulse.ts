@@ -4,7 +4,9 @@ import { useState, useEffect, useRef, useCallback } from "react"
 export function useCompanionPulse(estimatedMinutes: number | null) {
   const [shouldPulse, setShouldPulse] = useState(false)
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const startTimeRef = useRef<number | null>(null)
+  const sessionStartRef = useRef<number | null>(null)
+  const accumulatedRef = useRef(0)
+  const thresholdRef = useRef(0)
 
   useEffect(() => {
     if (estimatedMinutes === null || estimatedMinutes === undefined) {
@@ -12,36 +14,45 @@ export function useCompanionPulse(estimatedMinutes: number | null) {
       return
     }
 
-    const thresholdMs = estimatedMinutes * 60 * 1000 * 2
-    startTimeRef.current = Date.now()
+    thresholdRef.current = estimatedMinutes * 60 * 1000 * 2
+    accumulatedRef.current = 0
+    sessionStartRef.current = Date.now()
 
     const checkPulse = () => {
-      const elapsed = Date.now() - (startTimeRef.current ?? Date.now())
-      if (elapsed >= thresholdMs) {
+      const elapsed = accumulatedRef.current + (Date.now() - (sessionStartRef.current ?? Date.now()))
+      if (elapsed >= thresholdRef.current) {
         setShouldPulse(true)
       }
     }
 
     const startInterval = () => {
+      sessionStartRef.current = Date.now()
       timerRef.current = setInterval(checkPulse, 10000)
     }
 
-    const subscription = AppState.addEventListener("change", (state) => {
-      if (state === "active") startInterval()
-      else if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
+    const stopInterval = () => {
+      if (sessionStartRef.current) {
+        accumulatedRef.current += Date.now() - sessionStartRef.current
       }
-    })
-
-    startInterval()
-
-    return () => {
-      subscription.remove()
       if (timerRef.current) {
         clearInterval(timerRef.current)
         timerRef.current = null
       }
+    }
+
+    startInterval()
+
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        startInterval()
+      } else {
+        stopInterval()
+      }
+    })
+
+    return () => {
+      subscription.remove()
+      stopInterval()
     }
   }, [estimatedMinutes])
 

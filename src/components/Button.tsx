@@ -32,6 +32,7 @@ export function Button({ title, onPress, variant = "primary", disabled, style }:
           variant === "secondary" && styles.secondaryText,
           variant === "link" && styles.linkText,
           variant === "quiet" && styles.quietText,
+          disabled && styles.disabledText,
         ]}
       >
         {title}
@@ -44,7 +45,7 @@ const styles = StyleSheet.create({
   base: {
     paddingVertical: 12,
     paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.lg,
+    borderRadius: theme.radius.full,
     alignItems: "center",
     justifyContent: "center",
   },
@@ -68,7 +69,12 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
   },
   disabled: {
-    opacity: 0.5,
+    backgroundColor: theme.colors.surfaceDim,
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  disabledText: {
+    color: theme.colors.onSurfaceVariant,
   },
   text: {
     fontFamily: theme.typography.fontFamily,

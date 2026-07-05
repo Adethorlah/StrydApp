@@ -7,6 +7,9 @@ import {
   setCurrentStep,
   getCompletedStepIds,
   addCompletedStepId,
+  setPausedTask,
+  clearPausedTask,
+  setPausedAt,
 } from "../lib/storage"
 import { Task, Step } from "../types"
 
@@ -22,9 +25,9 @@ export function useTaskState() {
       getCompletedStepIds(),
     ]).then(([task, step, completed]) => {
       if (task) {
-        setCurrentTaskState(task as Task)
+        setCurrentTaskState(task)
         if (step) {
-          const idx = (task as Task).steps.findIndex((s) => s.step_order === (step as Step).step_order)
+          const idx = task.steps.findIndex((s) => s.step_order === step.step_order)
           setCurrentStepIndex(idx >= 0 ? idx : 0)
         }
       }
@@ -64,9 +67,9 @@ export function useTaskState() {
       getCompletedStepIds(),
     ])
     if (task) {
-      setCurrentTaskState(task as Task)
+      setCurrentTaskState(task)
       if (step) {
-        const idx = (task as Task).steps.findIndex((s) => s.step_order === (step as Step).step_order)
+        const idx = task.steps.findIndex((s) => s.step_order === step.step_order)
         setCurrentStepIndex(idx >= 0 ? idx : 0)
       }
     } else {
@@ -82,6 +85,45 @@ export function useTaskState() {
     setCurrentStepIndex(0)
     setCompletedStepIdsState([])
   }, [])
+
+  const pauseTask = useCallback(async () => {
+    if (!currentTask) return
+    const now = new Date().toISOString()
+    const pausedTask = { ...currentTask, status: "paused" as const, paused_at: now }
+    await setPausedTask(pausedTask)
+    await setPausedAt(now)
+    await clearCurrentTask()
+    setCurrentTaskState(null)
+    setCurrentStepIndex(0)
+    setCompletedStepIdsState([])
+  }, [currentTask])
+
+  const archiveTask = useCallback(async () => {
+    await clearCurrentTask()
+    setCurrentTaskState(null)
+    setCurrentStepIndex(0)
+    setCompletedStepIdsState([])
+  }, [])
+
+  const replaceStepWithSubSteps = useCallback(async (
+    stepIndex: number,
+    subSteps: Step[]
+  ) => {
+    if (!currentTask) return
+    const updatedSteps = [...currentTask.steps]
+    const baseOrder = updatedSteps[stepIndex].step_order
+    updatedSteps.splice(stepIndex, 1, ...subSteps.map((s, i) => ({
+      ...s,
+      step_order: baseOrder + i,
+      parent_step_id: currentTask.steps[stepIndex].id ?? null,
+    })))
+    const reindexedSteps = updatedSteps.map((s, i) => ({ ...s, step_order: i + 1 }))
+    const updatedTask = { ...currentTask, steps: reindexedSteps }
+    await setCurrentTask(updatedTask)
+    await setCurrentStep(reindexedSteps[stepIndex])
+    setCurrentTaskState(updatedTask)
+    setCurrentStepIndex(stepIndex)
+  }, [currentTask])
 
   const hasActiveTask = currentTask !== null
   const isTaskComplete =
@@ -99,5 +141,8 @@ export function useTaskState() {
     completeStepAndAdvance,
     clearTask,
     reloadFromStorage,
+    pauseTask,
+    archiveTask,
+    replaceStepWithSubSteps,
   }
 }

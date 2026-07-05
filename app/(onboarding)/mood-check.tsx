@@ -38,11 +38,13 @@ export default function MoodCheck() {
         <Text style={styles.progressLabel}>Step 2 of 2</Text>
       </View>
 
-      <Text style={styles.title}>How are you feeling right now?</Text>
-      <Text style={styles.subtext}>Your mood helps me shape the steps to fit your energy</Text>
+      <View style={styles.content}>
+        <Text style={styles.title}>How are you feeling right{'\u00A0'}now?</Text>
+        <Text style={styles.subtext}>Your mood helps me shape the steps to{'\u00A0'}fit your energy</Text>
 
-      <View style={styles.moodRow}>
-        <EmojiMoodPicker onSelect={handleMoodSelect} autoAdvance />
+        <View style={styles.moodRow}>
+          <EmojiMoodPicker onSelect={handleMoodSelect} />
+        </View>
       </View>
     </View>
   )
@@ -52,13 +54,13 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: STATUS_BAR_HEIGHT + 40,
+    paddingTop: STATUS_BAR_HEIGHT + 16,
     backgroundColor: theme.colors.background,
-    gap: theme.spacing.lg,
   },
   topRow: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: theme.spacing.lg,
   },
   backButton: {
     marginRight: 16,
@@ -72,30 +74,35 @@ const styles = StyleSheet.create({
   },
   progressSection: {
     gap: theme.spacing.sm,
-    marginBottom: 8,
+    marginBottom: theme.spacing.md,
   },
   progressTrack: {
     width: "100%",
-    height: 8,
-    backgroundColor: theme.colors.outline,
-    borderRadius: 4,
+    height: 6,
+    backgroundColor: theme.colors.surfaceContainerHighest,
+    borderRadius: 3,
     overflow: "hidden",
   },
   progressFill: {
     width: "100%",
-    height: 8,
-    backgroundColor: theme.colors.onTertiaryContainer,
-    borderRadius: 4,
+    height: 6,
+    backgroundColor: theme.colors.onSurfaceVariant,
+    borderRadius: 3,
   },
   progressLabel: {
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.label.medium.fontSize,
     color: theme.colors.onSurfaceVariant,
   },
+  content: {
+    flex: 1,
+    gap: theme.spacing.lg,
+    paddingTop: theme.spacing.xl,
+  },
   title: {
     fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.title.fontSize,
-    lineHeight: theme.typography.title.lineHeight,
+    fontSize: 25,
+    lineHeight: 36,
     fontWeight: "700",
     color: theme.colors.onBackground,
   },
@@ -103,10 +110,10 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.body.medium.fontSize,
     color: theme.colors.onSurfaceVariant,
-    marginTop: -16,
+    marginTop: -theme.spacing.sm,
   },
   moodRow: {
     alignItems: "center",
-    marginTop: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
   },
 })

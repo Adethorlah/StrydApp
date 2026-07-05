@@ -1,4 +1,4 @@
-import { useRef, useEffect } from "react"
+import { useRef, useEffect, useState, useCallback } from "react"
 import {
   View,
   Text,
@@ -8,9 +8,12 @@ import {
   Dimensions,
   Modal,
   ScrollView,
+  TextInput,
+  Keyboard,
 } from "react-native"
 import { Feather } from "@expo/vector-icons"
 import { theme } from "../theme/tokens"
+import { useAuth } from "../hooks/useAuth"
 
 interface StepNodeProps {
   stepOrder: number
@@ -20,6 +23,7 @@ interface StepNodeProps {
   isActive: boolean
   isCompleted: boolean
   isLocked: boolean
+  isGuestLocked: boolean
   isSelected: boolean
   onSelect: () => void
   onDismiss: () => void
@@ -35,6 +39,10 @@ const COLORS = {
   iconGrey: theme.colors.onSurfaceVariant,
 }
 
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)
+}
+
 export function StepNode({
   stepOrder,
   title,
@@ -43,16 +51,26 @@ export function StepNode({
   isActive,
   isCompleted,
   isLocked,
+  isGuestLocked,
   isSelected,
   onSelect,
   onDismiss,
   onBegin,
 }: StepNodeProps) {
+  const { signInWithGoogle, signUpWithEmail, signInWithEmail, migrateWithUser } = useAuth()
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current
   const pulseAnim = useRef(new Animated.Value(1)).current
+  const [signUpEmail, setSignUpEmail] = useState("")
+  const [isEmailSubmitting, setIsEmailSubmitting] = useState(false)
+  const [emailError, setEmailError] = useState("")
+  const [isKeyboardActive, setIsKeyboardActive] = useState(false)
 
   useEffect(() => {
     if (isSelected) {
+      setSignUpEmail("")
+      setEmailError("")
+      setIsEmailSubmitting(false)
+      setIsKeyboardActive(false)
       Animated.spring(slideAnim, {
         toValue: 0,
         useNativeDriver: true,
@@ -100,17 +118,53 @@ export function StepNode({
       return <Feather name="check" size={18} color="#fff" strokeWidth={3} />
     }
     if (isActive) {
-      return (
-        <Text style={styles.stepNumberText}>{stepOrder}</Text>
-      )
+      return <Text style={styles.stepNumberText}>{stepOrder}</Text>
     }
     return <Feather name="lock" size={16} color={COLORS.iconGrey} />
   }
 
-  const isDisabled = isLocked || (!isActive && !isCompleted)
+  // THIS IS THE FIXED LINE
+  // Guest locked steps must never be disabled — tapping them opens the sign-up sheet
+  // Only truly locked steps (not active, not completed, not guest locked) are disabled
+  const isDisabled = isLocked && !isGuestLocked && !isActive && !isCompleted
+
+  const canSignUpEmail = isValidEmail(signUpEmail) && !isKeyboardActive
+
+  const handleGoogleSignIn = useCallback(async () => {
+    try {
+      setIsEmailSubmitting(true)
+      await signInWithGoogle()
+      onDismiss()
+    } catch {
+      setEmailError("Sign in was cancelled or failed.")
+    } finally {
+      setIsEmailSubmitting(false)
+    }
+  }, [signInWithGoogle, onDismiss])
+
+  const handleEmailSignUp = useCallback(async () => {
+    if (!canSignUpEmail) return
+    try {
+      setIsEmailSubmitting(true)
+      setEmailError("")
+      const password = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2)
+      await signUpWithEmail(signUpEmail.trim(), password)
+      const user = await signInWithEmail(signUpEmail.trim(), password)
+      if (user) {
+        await migrateWithUser(user)
+      }
+      onDismiss()
+    } catch (e: unknown) {
+      setEmailError(e instanceof Error ? e.message : "Something went wrong. Please try again.")
+    } finally {
+      setIsEmailSubmitting(false)
+    }
+  }, [signUpEmail, canSignUpEmail, signUpWithEmail, signInWithEmail, migrateWithUser, onDismiss])
+
+  const sheetHeight = isGuestLocked ? SCREEN_HEIGHT * 0.8 : SCREEN_HEIGHT * 0.75
 
   return (
-    <>
+    <View style={styles.nodeContainer}>
       <TouchableOpacity
         onPress={isDisabled ? undefined : onSelect}
         activeOpacity={isDisabled ? 1 : 0.75}
@@ -121,18 +175,8 @@ export function StepNode({
             isActive && { transform: [{ scale: pulseAnim }] },
           ]}
         >
-          <View
-            style={[
-              styles.outerRing,
-              { borderColor: outerColor },
-            ]}
-          >
-            <View
-              style={[
-                styles.innerRing,
-                { borderColor: innerColor },
-              ]}
-            >
+          <View style={[styles.outerRing, { borderColor: outerColor }]}>
+            <View style={[styles.innerRing, { borderColor: innerColor }]}>
               <View
                 style={[
                   styles.centerCircle,
@@ -146,6 +190,8 @@ export function StepNode({
           </View>
         </Animated.View>
       </TouchableOpacity>
+
+      <Text style={styles.stepLabel}>Step {stepOrder}</Text>
 
       <Modal
         visible={isSelected}
@@ -161,72 +207,130 @@ export function StepNode({
           <Animated.View
             style={[
               styles.sheet,
-              { transform: [{ translateY: slideAnim }] },
+              { height: sheetHeight, transform: [{ translateY: slideAnim }] },
             ]}
           >
             <TouchableOpacity activeOpacity={1} onPress={() => { }}>
-
-              {/* Handle bar */}
               <View style={styles.handle} />
 
-              {/* Back button */}
               <TouchableOpacity onPress={onDismiss} style={styles.backButton}>
                 <Text style={styles.backText}>← Back</Text>
               </TouchableOpacity>
 
-              <ScrollView
-                style={styles.sheetScroll}
-                showsVerticalScrollIndicator={false}
-              >
-                {/* Title */}
-                <Text style={styles.sheetTitle}>{title}</Text>
-
-                {/* Step number badge */}
-                <View style={styles.stepBadge}>
-                  <Text style={styles.stepBadgeText}>
-                    Step {stepOrder}
-                    {estimatedMinutes ? ` · ${estimatedMinutes} min` : ""}
+              {isGuestLocked ? (
+                <ScrollView
+                  style={styles.sheetScroll}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  <Text style={styles.sheetTitle}>
+                    You're making great progress!
                   </Text>
-                </View>
+                  <Text style={styles.guestLockMessage}>
+                    Sign up to continue your journey and unlock all steps.
+                  </Text>
 
-                {/* Instruction */}
-                {instruction && (
-                  <Text style={styles.sheetInstruction}>{instruction}</Text>
-                )}
-
-                {/* Begin button */}
-                {onBegin && isActive && (
                   <TouchableOpacity
-                    style={styles.beginButton}
-                    onPress={onBegin}
+                    style={styles.googleButton}
+                    onPress={handleGoogleSignIn}
                     activeOpacity={0.85}
+                    disabled={isEmailSubmitting}
                   >
-                    <Text style={styles.beginButtonText}>
-                      Begin this step
+                    <Text style={styles.googleButtonText}>
+                      {isEmailSubmitting ? "Signing in..." : "Continue with Google"}
                     </Text>
                   </TouchableOpacity>
-                )}
 
-                {/* Completed state message */}
-                {isCompleted && (
-                  <View style={styles.completedBanner}>
-                    <Text style={styles.completedBannerText}>
-                      ✓ You've completed this step
+                  <View style={styles.orDivider}>
+                    <View style={styles.orLine} />
+                    <Text style={styles.orText}>or</Text>
+                    <View style={styles.orLine} />
+                  </View>
+
+                  <TextInput
+                    style={styles.emailInput}
+                    placeholder="Enter your email"
+                    placeholderTextColor={theme.colors.onSurfaceVariant}
+                    value={signUpEmail}
+                    onChangeText={setSignUpEmail}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    onFocus={() => setIsKeyboardActive(true)}
+                    onBlur={() => setIsKeyboardActive(false)}
+                    editable={!isEmailSubmitting}
+                  />
+
+                  {emailError ? (
+                    <Text style={styles.emailErrorText}>{emailError}</Text>
+                  ) : null}
+
+                  <TouchableOpacity
+                    style={[
+                      styles.signUpButton,
+                      (!canSignUpEmail || isEmailSubmitting) && styles.signUpButtonDisabled,
+                    ]}
+                    onPress={handleEmailSignUp}
+                    activeOpacity={0.85}
+                    disabled={!canSignUpEmail || isEmailSubmitting}
+                  >
+                    <Text style={styles.signUpButtonText}>
+                      {isEmailSubmitting ? "Creating account..." : "Sign up"}
+                    </Text>
+                  </TouchableOpacity>
+
+                  <View style={{ height: 40 }} />
+                </ScrollView>
+              ) : (
+                <ScrollView
+                  style={styles.sheetScroll}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <Text style={styles.sheetTitle}>{title}</Text>
+
+                  <View style={styles.stepBadge}>
+                    <Text style={styles.stepBadgeText}>
+                      Step {stepOrder}
+                      {estimatedMinutes ? ` · ${estimatedMinutes} min` : ""}
                     </Text>
                   </View>
-                )}
 
-                <View style={{ height: 40 }} />
-              </ScrollView>
+                  {instruction && (
+                    <Text style={styles.sheetInstruction}>{instruction}</Text>
+                  )}
+
+                  {onBegin && isActive && (
+                    <TouchableOpacity
+                      style={styles.beginButton}
+                      onPress={onBegin}
+                      activeOpacity={0.85}
+                    >
+                      <Text style={styles.beginButtonText}>Begin this step</Text>
+                    </TouchableOpacity>
+                  )}
+
+                  {isCompleted && (
+                    <View style={styles.completedBanner}>
+                      <Text style={styles.completedBannerText}>
+                        ✓ You've completed this step
+                      </Text>
+                    </View>
+                  )}
+
+                  <View style={{ height: 40 }} />
+                </ScrollView>
+              )}
             </TouchableOpacity>
           </Animated.View>
         </TouchableOpacity>
       </Modal>
-    </>
+    </View>
   )
 }
 
 const styles = StyleSheet.create({
+  nodeContainer: {
+    alignItems: "center",
+  },
   outerRing: {
     width: 68,
     height: 68,
@@ -263,8 +367,13 @@ const styles = StyleSheet.create({
     color: COLORS.iconGrey,
     fontFamily: theme.typography.fontFamily,
   },
-
-  // --- Bottom sheet ---
+  stepLabel: {
+    fontSize: 11,
+    color: theme.colors.onSurfaceVariant,
+    fontFamily: theme.typography.fontFamily,
+    textAlign: "center",
+    marginTop: 4,
+  },
   backdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.35)",
@@ -276,7 +385,6 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 24,
     paddingHorizontal: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
-    maxHeight: SCREEN_HEIGHT * 0.75,
   },
   sheetScroll: {
     paddingTop: theme.spacing.md,
@@ -353,5 +461,77 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.body.medium.fontSize,
     color: theme.colors.success ?? "#4CAF50",
     fontWeight: theme.typography.weight.medium,
+  },
+  guestLockMessage: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.body.large.fontSize,
+    lineHeight: theme.typography.body.large.lineHeight,
+    color: theme.colors.onSurfaceVariant,
+    marginBottom: theme.spacing.xl,
+  },
+  googleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing.sm,
+    backgroundColor: theme.colors.primary,
+    borderRadius: theme.radius.lg,
+    paddingVertical: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  googleButtonText: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.body.medium.fontSize,
+    fontWeight: theme.typography.weight.semibold,
+    color: theme.colors.onPrimary,
+  },
+  orDivider: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: theme.spacing.md,
+  },
+  orLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: theme.colors.outline,
+  },
+  orText: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.body.small.fontSize,
+    color: theme.colors.onSurfaceVariant,
+    marginHorizontal: theme.spacing.md,
+  },
+  emailInput: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.body.medium.fontSize,
+    color: theme.colors.onSurface,
+    borderWidth: 1,
+    borderColor: theme.colors.outline,
+    borderRadius: theme.radius.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    backgroundColor: theme.colors.surfaceContainerLow,
+    marginBottom: theme.spacing.sm,
+  },
+  emailErrorText: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.body.small.fontSize,
+    color: theme.colors.error,
+    marginBottom: theme.spacing.sm,
+  },
+  signUpButton: {
+    backgroundColor: theme.colors.secondary,
+    borderRadius: theme.radius.lg,
+    paddingVertical: theme.spacing.md,
+    alignItems: "center",
+  },
+  signUpButtonDisabled: {
+    opacity: 0.4,
+  },
+  signUpButtonText: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.body.medium.fontSize,
+    fontWeight: theme.typography.weight.semibold,
+    color: theme.colors.onSecondary,
   },
 })

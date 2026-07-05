@@ -35,7 +35,14 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: theme.colors.background,
   },
-  backgroundFill: {},
+  backgroundFill: {
+    position: "absolute",
+    left: 24,
+    right: 24,
+    top: 0,
+    bottom: 0,
+    overflow: "hidden",
+  },
   overlay: {
     flex: 1,
     justifyContent: "flex-end",

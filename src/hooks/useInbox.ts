@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { useAuth } from "./useAuth"
-import { getInboxMessages, markMessageAsRead, markAllAsRead } from "../lib/supabase-inbox"
+import { getInboxMessages, markMessageAsRead, markAllAsRead } from "../services/inbox.service"
 import type { InboxMessage } from "../types"
 
 export function useInbox() {

@@ -185,7 +185,7 @@ export function AiCompanion({
                     onChangeText={setInputText}
                     placeholder="Type here..."
                     placeholderTextColor={theme.colors.onSurfaceVariant}
-                    style={styles.input}
+                    style={[styles.input, Platform.OS === "web" && ({ outlineStyle: "none" } as any)]}
                     onSubmitEditing={handleSend}
                     returnKeyType="send"
                     blurOnSubmit={false}
@@ -316,7 +316,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     backgroundColor: theme.colors.surfaceContainerHighest,
     borderRadius: theme.radius.full,
-    outlineStyle: "none",
   },
   sendButton: {
     paddingHorizontal: theme.spacing.md,

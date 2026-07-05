@@ -1,110 +1,110 @@
 import { useState } from "react"
-import { View, TouchableOpacity, Text, StyleSheet } from "react-native"
+import { View, TouchableOpacity, Text, Image, StyleSheet } from "react-native"
 import { theme } from "../theme/tokens"
+import { Button } from "./Button"
 
 const MOODS = [
-  { emoji: "😅", label: "Whew", score: 1 },
-  { emoji: "🫤", label: "Meh", score: 2 },
-  { emoji: "😐", label: "Okay", score: 3 },
-  { emoji: "😄", label: "Happy", score: 4 },
-  { emoji: "🤩", label: "Ready", score: 5 },
+  { image: require("../assets/images/moods/Whew.png"), label: "Whew", score: 1 },
+  { image: require("../assets/images/moods/Meh.png"), label: "Meh", score: 2 },
+  { image: require("../assets/images/moods/Okay.png"), label: "Okay", score: 3 },
+  { image: require("../assets/images/moods/Happy.png"), label: "Happy", score: 4 },
+  { image: require("../assets/images/moods/Ready.png"), label: "Ready", score: 5 },
 ]
 
 interface EmojiMoodPickerProps {
   onSelect: (score: number) => void
-  autoAdvance?: boolean
 }
 
-function MoodCard({
-  mood,
-  isSelected,
-  onPress,
-}: {
-  mood: (typeof MOODS)[0]
-  isSelected: boolean
-  onPress: () => void
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      style={[styles.card, isSelected && styles.selectedCard]}
-      activeOpacity={0.7}
-    >
-      <Text style={styles.emoji}>{mood.emoji}</Text>
-      <Text style={[styles.label, isSelected && styles.selectedLabel]}>
-        {mood.label}
-      </Text>
-    </TouchableOpacity>
-  )
-}
-
-export function EmojiMoodPicker({ onSelect, autoAdvance = false }: EmojiMoodPickerProps) {
+export function EmojiMoodPicker({ onSelect }: EmojiMoodPickerProps) {
   const [selectedScore, setSelectedScore] = useState<number | null>(null)
 
   const handlePress = (score: number) => {
-    setSelectedScore(score)
-    onSelect(score)
+    setSelectedScore((prev) => (prev === score ? null : score))
   }
 
   return (
     <View style={styles.container}>
       <View style={styles.row}>
         {MOODS.slice(0, 3).map((mood) => (
-          <MoodCard
+          <TouchableOpacity
             key={mood.score}
-            mood={mood}
-            isSelected={selectedScore === mood.score}
             onPress={() => handlePress(mood.score)}
-          />
+            style={[styles.card, selectedScore === mood.score && styles.selectedCard]}
+            activeOpacity={0.7}
+          >
+            <Image source={mood.image} style={styles.image} />
+            <Text style={[styles.label, selectedScore === mood.score && styles.selectedLabel]}>
+              {mood.label}
+            </Text>
+          </TouchableOpacity>
         ))}
       </View>
       <View style={styles.row}>
         {MOODS.slice(3).map((mood) => (
-          <MoodCard
+          <TouchableOpacity
             key={mood.score}
-            mood={mood}
-            isSelected={selectedScore === mood.score}
             onPress={() => handlePress(mood.score)}
-          />
+            style={[styles.card, selectedScore === mood.score && styles.selectedCard]}
+            activeOpacity={0.7}
+          >
+            <Image source={mood.image} style={styles.image} />
+            <Text style={[styles.label, selectedScore === mood.score && styles.selectedLabel]}>
+              {mood.label}
+            </Text>
+          </TouchableOpacity>
         ))}
       </View>
+      <Button
+        title="Continue"
+        onPress={() => selectedScore && onSelect(selectedScore)}
+        variant="primary"
+        disabled={!selectedScore}
+        style={styles.nextButton}
+      />
     </View>
   )
 }
 
 const styles = StyleSheet.create({
   container: {
-    gap: 12,
+    width: "100%",
+    alignItems: "center",
+    gap: theme.spacing.lg,
   },
   row: {
     flexDirection: "row",
     justifyContent: "center",
-    gap: theme.spacing.xs,
+    gap: 12,
   },
   card: {
-    width: 106,
-    height: 106,
-    borderRadius: 12,
-    backgroundColor: theme.colors.surfaceVariant,
+    width: 96,
+    height: 108,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: theme.colors.outline,
     alignItems: "center",
     justifyContent: "center",
-    gap: 4,
+    gap: theme.spacing.xs,
   },
   selectedCard: {
-    backgroundColor: theme.colors.primaryContainer,
     borderWidth: 2,
     borderColor: theme.colors.primary,
   },
-  emoji: {
-    fontSize: 44,
+  image: {
+    width: 76,
+    height: 76,
   },
   label: {
     fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.label.small.fontSize,
-    color: theme.colors.onSurface,
+    fontSize: theme.typography.label.medium.fontSize,
+    color: theme.colors.onSurfaceVariant,
   },
   selectedLabel: {
     color: theme.colors.primary,
     fontWeight: theme.typography.weight.semibold,
+  },
+  nextButton: {
+    width: "100%",
+    marginTop: theme.spacing.lg,
   },
 })

@@ -16,12 +16,13 @@ interface JourneyPathProps {
   currentStepIndex: number
   phases?: Phase[]
   onBeginStep: () => void
+  isAuthenticated: boolean
 }
 
 const { width: SCREEN_WIDTH } = Dimensions.get("window")
 const CANVAS_WIDTH = SCREEN_WIDTH - theme.spacing.lg * 2
 const NODE_SIZE = 64
-const NODE_SPACING = 90
+const NODE_SPACING = 110
 const ZIGZAG_OFFSET = CANVAS_WIDTH * 0.28
 
 function getNodeX(index: number): number {
@@ -84,6 +85,7 @@ export function JourneyPath({
   currentStepIndex,
   phases,
   onBeginStep,
+  isAuthenticated,
 }: JourneyPathProps) {
   const [selectedStepOrder, setSelectedStepOrder] = useState<number | null>(null)
   const totalHeight = steps.length * NODE_SPACING + NODE_SIZE * 2
@@ -92,6 +94,7 @@ export function JourneyPath({
   const completedCount = completedStepIds.length
   const totalCount = steps.length
 
+  const FIRST_FREE_STEPS = 2
   let lastPhase = 0
 
   return (
@@ -141,7 +144,9 @@ export function JourneyPath({
           const stepPhase = step.phase ?? 1
           const isPhaseLocked = stepPhase > activePhase
           const isLocked =
-            (index > currentStepIndex && !isCompleted) || isPhaseLocked
+            (index >= FIRST_FREE_STEPS && index !== currentStepIndex && !isCompleted) || isPhaseLocked
+          const isGuestLocked =
+            !isAuthenticated && !isCompleted && index >= FIRST_FREE_STEPS
 
           const phase = getPhaseLabel(step.step_order, steps, phases)
           const showPhaseMarker = phase && phase.phase_order !== lastPhase
@@ -179,6 +184,7 @@ export function JourneyPath({
                   isActive={isActive && !isPhaseLocked}
                   isCompleted={isCompleted}
                   isLocked={isLocked}
+                  isGuestLocked={isGuestLocked}
                   isSelected={selectedStepOrder === step.step_order}
                   onSelect={() => setSelectedStepOrder(step.step_order)}
                   onDismiss={() => setSelectedStepOrder(null)}

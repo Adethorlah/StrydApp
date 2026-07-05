@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, useCallback, useRef, ReactNode } from "react"
-import { supabase } from "../lib/supabase"
+import { supabase } from "../services/supabase.service"
 import { CompanionContext } from "../types"
 
 export interface Message {

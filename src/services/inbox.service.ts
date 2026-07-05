@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabase } from "./supabase.service"
 
 export async function getInboxMessages(userId: string) {
   const { data, error } = await supabase

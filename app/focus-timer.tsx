@@ -210,14 +210,16 @@ export default function FocusTimer() {
       >
         {acknowledgment ? (
           <View style={focusStyles.acknowledgmentContainer}>
-            <CompanionAvatar size={110} />
+            <CompanionAvatar size={72} />
             <Text style={focusStyles.acknowledgmentText}>{acknowledgment}</Text>
           </View>
         ) : (
           <>
             {/* Avatar */}
             <View style={focusStyles.avatarSection}>
-              <CompanionAvatar size={100} />
+              <View style={focusStyles.avatarGlow}>
+                <CompanionAvatar size={72} />
+              </View>
             </View>
 
             {/* Hero message card */}
@@ -330,7 +332,7 @@ export default function FocusTimer() {
                     onChangeText={setInputText}
                     placeholder="Ask anything..."
                     placeholderTextColor={theme.colors.onSurfaceVariant}
-                    style={focusStyles.chatInput}
+                    style={[focusStyles.chatInput, Platform.OS === "web" && ({ outlineStyle: "none" } as any)]}
                     onSubmitEditing={handleSend}
                     returnKeyType="send"
                     blurOnSubmit={false}
@@ -367,6 +369,12 @@ const focusStyles = StyleSheet.create({
   },
   avatarSection: {
     alignItems: "center",
+    marginBottom: theme.spacing.md,
+  },
+  avatarGlow: {
+    backgroundColor: "rgba(255,255,255,0.08)",
+    borderRadius: 9999,
+    padding: theme.spacing.sm,
   },
   heroCard: {
     backgroundColor: "rgba(255,255,255,0.08)",
@@ -563,7 +571,6 @@ const focusStyles = StyleSheet.create({
     backgroundColor: theme.colors.surfaceContainerHighest,
     borderRadius: theme.radius.full,
     maxHeight: 80,
-    outlineStyle: "none",
   },
   sendBtn: {
     paddingHorizontal: theme.spacing.md,

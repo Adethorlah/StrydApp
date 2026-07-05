@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabase } from "./supabase.service"
 
 export async function getOrCreateProfile(userId: string, email?: string, name?: string) {
   const { data: existing, error: fetchError } = await supabase

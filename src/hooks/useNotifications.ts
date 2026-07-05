@@ -1,7 +1,7 @@
 import { useState, useEffect, useCallback } from "react"
 import { getNotificationsEnabled, setNotificationsEnabled, getRestUntil, getUserName } from "../lib/storage"
-import { supabase } from "../lib/supabase"
-import { updateNotificationPreference } from "../lib/supabase-users"
+import { supabase } from "../services/supabase.service"
+import { updateNotificationPreference } from "../services/users.service"
 
 export function useNotifications() {
   const [enabled, setEnabledState] = useState(true)
@@ -43,16 +43,13 @@ export function useNotifications() {
       const userName = await getUserName()
       const personalizedBody = userName ? body.replace("[name]", userName) : body
 
-      // Uses expo-notifications if available
-      const Notifications = require("expo-notifications")
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title,
-          body: personalizedBody,
-          sound: true,
-        },
-        trigger: null,
-      })
+      // TODO: Install and configure expo-notifications before enabling
+      // import * as Notifications from "expo-notifications"
+      // await Notifications.scheduleNotificationAsync({
+      //   content: { title, body: personalizedBody, sound: true },
+      //   trigger: null,
+      // })
+      console.log("Mock Notification:", title, personalizedBody)
     } catch {
       // Notifications unavailable — fail silently
     }

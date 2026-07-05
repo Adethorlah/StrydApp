@@ -2,6 +2,7 @@ import { useState, useCallback } from "react"
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { router } from "expo-router"
+import { useFocusEffect } from "@react-navigation/native"
 import { Feather } from "@expo/vector-icons"
 import { theme } from "../../src/theme/tokens"
 import { InboxSheet } from "../../src/components/InboxSheet"
@@ -10,6 +11,7 @@ import { useAuth } from "../../src/hooks/useAuth"
 import { useNotifications } from "../../src/hooks/useNotifications"
 import { useInbox } from "../../src/hooks/useInbox"
 import { useTaskState } from "../../src/hooks/useTaskState"
+import { getTasksCompletedCount } from "../../src/lib/storage"
 
 function Avatar({ name, size = 80 }: { name: string; size?: number }) {
   const initial = (name ?? "?").charAt(0).toUpperCase()
@@ -20,50 +22,30 @@ function Avatar({ name, size = 80 }: { name: string; size?: number }) {
   )
 }
 
-interface ToggleRowProps {
+interface SettingRowProps {
+  icon: keyof typeof Feather.glyphMap
   label: string
-  value: boolean
-  onToggle: (val: boolean) => void
+  onPress?: () => void
+  right?: React.ReactNode
 }
 
-function ToggleRow({ label, value, onToggle }: ToggleRowProps) {
+function SettingRow({ icon, label, onPress, right }: SettingRowProps) {
   return (
-    <View style={styles.toggleRow}>
-      <Text style={styles.toggleLabel}>{label}</Text>
-      <TouchableOpacity
-        onPress={() => onToggle(!value)}
-        style={[styles.toggle, value && styles.toggleActive]}
-      >
-        <View style={[styles.toggleThumb, value && styles.toggleThumbActive]} />
-      </TouchableOpacity>
-    </View>
+    <TouchableOpacity style={styles.settingRow} onPress={onPress} activeOpacity={onPress ? 0.7 : 1} disabled={!onPress}>
+      <View style={styles.settingLeft}>
+        <Feather name={icon} size={20} color={theme.colors.onSurfaceVariant} />
+        <Text style={styles.settingLabel}>{label}</Text>
+      </View>
+      {right ?? <Feather name="chevron-right" size={18} color={theme.colors.outline} />}
+    </TouchableOpacity>
   )
 }
 
-interface SettingSectionProps {
-  icon: keyof typeof Feather.glyphMap
-  label: string
-  isOpen: boolean
-  onToggle: () => void
-  children: React.ReactNode
-}
-
-function SettingSection({ icon, label, isOpen, onToggle, children }: SettingSectionProps) {
+function Badge({ count }: { count: number }) {
+  if (count === 0) return null
   return (
-    <View style={styles.sectionWrapper}>
-      <TouchableOpacity style={styles.settingRow} onPress={onToggle} activeOpacity={0.7}>
-        <View style={styles.settingLeft}>
-          <Feather name={icon} size={20} color={theme.colors.onSurfaceVariant} />
-          <Text style={styles.settingLabel}>{label}</Text>
-        </View>
-        <Feather
-          name="chevron-down"
-          size={18}
-          color={theme.colors.outline}
-          style={{ transform: [{ rotate: isOpen ? "180deg" : "0deg" }] }}
-        />
-      </TouchableOpacity>
-      {isOpen && <View style={styles.dropdown}>{children}</View>}
+    <View style={styles.badge}>
+      <Text style={styles.badgeText}>{count}</Text>
     </View>
   )
 }
@@ -71,13 +53,19 @@ function SettingSection({ icon, label, isOpen, onToggle, children }: SettingSect
 export default function Profile() {
   const insets = useSafeAreaInsets()
   const { userName } = useOnboarding()
-  const { isAuthenticated, user, signOut } = useAuth()
+  const { user, signOut } = useAuth()
   const { unreadCount } = useInbox()
-  const { completedStepIds, currentTask, hasActiveTask } = useTaskState()
+  const { currentTask, hasActiveTask } = useTaskState()
+  const { enabled: notificationsEnabled, toggleEnabled } = useNotifications()
 
   const [inboxOpen, setInboxOpen] = useState(false)
-  const [openSection, setOpenSection] = useState<string | null>(null)
-  const { enabled: notificationsEnabled, toggleEnabled } = useNotifications()
+  const [tasksCompleted, setTasksCompleted] = useState(0)
+
+  useFocusEffect(
+    useCallback(() => {
+      getTasksCompletedCount().then(setTasksCompleted)
+    }, [])
+  )
 
   const handleSignOut = useCallback(() => {
     Alert.alert(
@@ -97,14 +85,12 @@ export default function Profile() {
     )
   }, [signOut])
 
-  const toggleSection = (section: string) => {
-    setOpenSection(openSection === section ? null : section)
-  }
+  const handleComingSoon = useCallback((feature: string) => {
+    Alert.alert(feature, "Coming soon.")
+  }, [])
 
   const displayName = userName ?? "Guest"
   const displayEmail = user?.email ?? ""
-  const stepsDone = completedStepIds.length
-  const totalSteps = currentTask?.steps.length ?? 0
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -120,77 +106,77 @@ export default function Profile() {
           {displayEmail ? <Text style={styles.emailText}>{displayEmail}</Text> : null}
         </View>
 
+        {hasActiveTask && currentTask ? (
+          <View style={styles.workingOnRow}>
+            <Text style={styles.workingOnLabel}>Currently working on</Text>
+            <Text style={styles.workingOnTitle}>{currentTask.title}</Text>
+          </View>
+        ) : null}
+
         <View style={styles.statsCard}>
           <View style={styles.statPanel}>
-            <Text style={styles.statNumber}>1</Text>
-            <Text style={styles.statLabel}>Task active</Text>
+            <Text style={styles.statNumber}>{hasActiveTask ? "1" : "0"}</Text>
+            <Text style={styles.statLabel}>Current task</Text>
           </View>
           <View style={styles.statDivider} />
           <View style={styles.statPanel}>
-            <Text style={styles.statNumber}>
-              {hasActiveTask ? `${stepsDone} / ${totalSteps}` : "--"}
-            </Text>
-            <Text style={styles.statLabel}>Steps done</Text>
+            <Text style={styles.statNumber}>{tasksCompleted}</Text>
+            <Text style={styles.statLabel}>Tasks completed</Text>
           </View>
+        </View>
+
+        <Text style={styles.sectionTitle}>Your journeys</Text>
+
+        <View style={styles.sectionCard}>
+          <TouchableOpacity
+            style={styles.settingRow}
+            onPress={() => handleComingSoon("Journey history")}
+            activeOpacity={0.7}
+          >
+            <View style={styles.settingLeft}>
+              <Feather name="book-open" size={20} color={theme.colors.onSurfaceVariant} />
+              <Text style={styles.settingLabel}>Journey history</Text>
+            </View>
+            <View style={styles.settingRight}>
+              <Badge count={tasksCompleted} />
+              <Feather name="chevron-right" size={18} color={theme.colors.outline} />
+            </View>
+          </TouchableOpacity>
         </View>
 
         <Text style={styles.sectionTitle}>Settings</Text>
 
-        <SettingSection
-          icon="user"
-          label="Account"
-          isOpen={openSection === "account"}
-          onToggle={() => toggleSection("account")}
-        >
-          <ToggleRow
-            label="Notifications"
-            value={notificationsEnabled}
-            onToggle={toggleEnabled}
+        <View style={styles.sectionCard}>
+          <SettingRow
+            icon="user"
+            label="Account"
+            onPress={() => handleComingSoon("Account")}
           />
-          {isAuthenticated && (
-            <ToggleRow
-              label="Email updates"
-              value={true}
-              onToggle={() => {}}
-            />
-          )}
-        </SettingSection>
-
-        <SettingSection
-          icon="help-circle"
-          label="Support"
-          isOpen={openSection === "support"}
-          onToggle={() => toggleSection("support")}
-        >
-          <ToggleRow
-            label="In-app tips"
-            value={true}
-            onToggle={() => {}}
+          <View style={styles.settingRow}>
+            <View style={styles.settingLeft}>
+              <Feather name="bell" size={20} color={theme.colors.onSurfaceVariant} />
+              <Text style={styles.settingLabel}>Notifications</Text>
+            </View>
+            <TouchableOpacity
+              onPress={() => toggleEnabled(!notificationsEnabled)}
+              style={[styles.toggle, notificationsEnabled && styles.toggleActive]}
+            >
+              <View style={[styles.toggleThumb, notificationsEnabled && styles.toggleThumbActive]} />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.sectionRowDivider} />
+          <SettingRow
+            icon="shield"
+            label="Privacy"
+            onPress={() => handleComingSoon("Privacy")}
           />
-          <ToggleRow
-            label="Onboarding hints"
-            value={false}
-            onToggle={() => {}}
+          <View style={styles.sectionRowDivider} />
+          <SettingRow
+            icon="help-circle"
+            label="Help & Support"
+            onPress={() => handleComingSoon("Help & Support")}
           />
-        </SettingSection>
-
-        <SettingSection
-          icon="clock"
-          label="Task History"
-          isOpen={openSection === "history"}
-          onToggle={() => toggleSection("history")}
-        >
-          <ToggleRow
-            label="Auto-archive completed"
-            value={true}
-            onToggle={() => {}}
-          />
-          <ToggleRow
-            label="Show step timings"
-            value={false}
-            onToggle={() => {}}
-          />
-        </SettingSection>
+        </View>
 
         <TouchableOpacity style={styles.logoutButton} onPress={handleSignOut}>
           <Feather name="log-out" size={18} color={theme.colors.error} />
@@ -266,6 +252,26 @@ const styles = StyleSheet.create({
     color: theme.colors.onSurfaceVariant,
   },
 
+  workingOnRow: {
+    alignItems: "center",
+    marginTop: -theme.spacing.sm,
+    marginBottom: theme.spacing.lg,
+  },
+  workingOnLabel: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.label.small.fontSize,
+    color: theme.colors.onSurfaceVariant,
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 2,
+  },
+  workingOnTitle: {
+    fontFamily: theme.typography.fontFamily,
+    fontSize: theme.typography.body.medium.fontSize,
+    fontWeight: theme.typography.weight.medium,
+    color: theme.colors.onBackground,
+  },
+
   statsCard: {
     flexDirection: "row",
     backgroundColor: theme.colors.onSurface,
@@ -314,12 +320,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
 
-  sectionWrapper: {
+  sectionCard: {
     backgroundColor: theme.colors.surfaceContainerLow,
     borderRadius: theme.radius.lg,
-    marginBottom: 1,
+    marginBottom: theme.spacing.xl,
     overflow: "hidden",
   },
+
   settingRow: {
     flexDirection: "row",
     alignItems: "center",
@@ -336,24 +343,33 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.body.medium.fontSize,
     color: theme.colors.onSurface,
   },
-  dropdown: {
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
-    gap: 1,
-  },
-
-  toggleRow: {
+  settingRight: {
     flexDirection: "row",
     alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.xs,
+    gap: theme.spacing.sm,
   },
-  toggleLabel: {
+  sectionRowDivider: {
+    height: 1,
+    backgroundColor: theme.colors.outlineVariant,
+    marginHorizontal: theme.spacing.md,
+  },
+
+  badge: {
+    minWidth: 20,
+    height: 20,
+    borderRadius: 10,
+    backgroundColor: theme.colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingHorizontal: 6,
+  },
+  badgeText: {
     fontFamily: theme.typography.fontFamily,
-    fontSize: theme.typography.body.small.fontSize,
-    color: theme.colors.onSurfaceVariant,
+    fontSize: 11,
+    fontWeight: theme.typography.weight.semibold,
+    color: theme.colors.onPrimary,
   },
+
   toggle: {
     width: 40,
     height: 22,

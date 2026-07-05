@@ -1,4 +1,4 @@
-import { supabase } from "./supabase"
+import { supabase } from "./supabase.service"
 
 export interface StepInput {
   step_order: number
@@ -101,6 +101,7 @@ export async function completeTask(taskId: string) {
     .from("tasks")
     .update({
       is_completed: true,
+      status: "completed",
       completed_at: new Date().toISOString(),
     })
     .eq("id", taskId)
@@ -108,17 +109,70 @@ export async function completeTask(taskId: string) {
   if (error) throw error
 }
 
+export async function pauseTask(taskId: string) {
+  const { error } = await supabase
+    .from("tasks")
+    .update({
+      status: "paused",
+      paused_at: new Date().toISOString(),
+    })
+    .eq("id", taskId)
+
+  if (error) throw error
+}
+
+export async function archiveTask(taskId: string) {
+  const { error } = await supabase
+    .from("tasks")
+    .update({
+      status: "archived",
+      is_completed: true,
+      completed_at: new Date().toISOString(),
+    })
+    .eq("id", taskId)
+
+  if (error) throw error
+}
+
+export async function saveFeedback(
+  userId: string,
+  reason: string,
+  taskId?: string,
+  feedbackText?: string
+) {
+  const { error } = await supabase
+    .from("feedback")
+    .insert({
+      user_id: userId,
+      task_id: taskId ?? null,
+      reason,
+      feedback_text: feedbackText ?? null,
+    })
+
+  if (error) throw error
+}
+
 export async function callTaskBreakdown(
-  taskTitle: string,
-  moodScore: number,
-  availableMinutes: number
+  task_title: string,
+  mood_score: number,
+  available_minutes: number,
+  task_description?: string
 ) {
   const { data, error } = await supabase.functions.invoke("task-breakdown", {
-    body: {
-      task_title: taskTitle,
-      mood_score: moodScore,
-      available_minutes: availableMinutes,
-    },
+    body: { task_title, mood_score, available_minutes, task_description },
+  });
+
+  if (error) throw error;
+  return data;
+}
+
+export async function callStepBreakdown(
+  step_title: string,
+  step_instruction: string,
+  estimated_minutes: number
+) {
+  const { data, error } = await supabase.functions.invoke("step-breakdown", {
+    body: { step_title, step_instruction, estimated_minutes },
   });
 
   if (error) throw error;

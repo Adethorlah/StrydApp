@@ -28,8 +28,8 @@ export default function SignUp() {
         await migrateWithUser(user)
       }
       router.back()
-    } catch (e: any) {
-      setError(e?.message ?? "Something went wrong. Please try again.")
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
@@ -51,8 +51,8 @@ export default function SignUp() {
       } catch {
         setError("Check your email to confirm your account. Your data is saved locally until then.")
       }
-    } catch (e: any) {
-      setError(e.message ?? "Something went wrong.")
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : "Something went wrong.")
     } finally {
       setIsSubmitting(false)
     }

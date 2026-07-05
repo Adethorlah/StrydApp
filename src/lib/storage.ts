@@ -1,4 +1,6 @@
 import AsyncStorage from "@react-native-async-storage/async-storage"
+import { SupabaseClient } from "@supabase/supabase-js"
+import { Task, Step, PauseReason } from "../types"
 
 const KEYS = {
   ONBOARDING_COMPLETE: "onboarding_complete",
@@ -11,6 +13,12 @@ const KEYS = {
   HAS_SEEN_SIGN_UP_PROMPT: "has_seen_sign_up_prompt",
   NOTIFICATIONS_ENABLED: "notifications_enabled",
   HAS_COMPLETED_FIRST_TASK: "has_completed_first_task",
+  PAUSED_TASK: "paused_task",
+  PAUSED_AT: "paused_at",
+  FEEDBACK_REASON: "feedback_reason",
+  FEEDBACK_TEXT: "feedback_text",
+  COMPLETED_TASK: "completed_task",
+  TASKS_COMPLETED_COUNT: "tasks_completed_count",
 }
 
 export async function getOnboardingComplete(): Promise<boolean> {
@@ -30,12 +38,12 @@ export async function setUserName(name: string): Promise<void> {
   await AsyncStorage.setItem(KEYS.USER_NAME, name)
 }
 
-export async function getCurrentTask(): Promise<object | null> {
+export async function getCurrentTask(): Promise<Task | null> {
   const val = await AsyncStorage.getItem(KEYS.CURRENT_TASK)
   return val ? JSON.parse(val) : null
 }
 
-export async function setCurrentTask(task: object): Promise<void> {
+export async function setCurrentTask(task: Task): Promise<void> {
   await AsyncStorage.setItem(KEYS.CURRENT_TASK, JSON.stringify(task))
 }
 
@@ -47,12 +55,12 @@ export async function clearCurrentTask(): Promise<void> {
   ])
 }
 
-export async function getCurrentStep(): Promise<object | null> {
+export async function getCurrentStep(): Promise<Step | null> {
   const val = await AsyncStorage.getItem(KEYS.CURRENT_STEP)
   return val ? JSON.parse(val) : null
 }
 
-export async function setCurrentStep(step: object): Promise<void> {
+export async function setCurrentStep(step: Step): Promise<void> {
   await AsyncStorage.setItem(KEYS.CURRENT_STEP, JSON.stringify(step))
 }
 
@@ -115,9 +123,84 @@ export async function setNotificationsEnabled(enabled: boolean): Promise<void> {
   await AsyncStorage.setItem(KEYS.NOTIFICATIONS_ENABLED, String(enabled))
 }
 
+export async function getPausedTask(): Promise<Task | null> {
+  const val = await AsyncStorage.getItem(KEYS.PAUSED_TASK)
+  return val ? JSON.parse(val) : null
+}
+
+export async function setPausedTask(task: Task): Promise<void> {
+  await AsyncStorage.setItem(KEYS.PAUSED_TASK, JSON.stringify(task))
+}
+
+export async function clearPausedTask(): Promise<void> {
+  await AsyncStorage.multiRemove([KEYS.PAUSED_TASK, KEYS.PAUSED_AT])
+}
+
+export async function setPausedAt(timestamp: string): Promise<void> {
+  await AsyncStorage.setItem(KEYS.PAUSED_AT, timestamp)
+}
+
+export async function getPausedAt(): Promise<string | null> {
+  return AsyncStorage.getItem(KEYS.PAUSED_AT)
+}
+
+export async function saveFeedbackLocally(
+  reason: PauseReason,
+  text?: string
+): Promise<void> {
+  await AsyncStorage.setItem(KEYS.FEEDBACK_REASON, reason)
+  if (text) {
+    await AsyncStorage.setItem(KEYS.FEEDBACK_TEXT, text)
+  }
+}
+
+export async function getLocalFeedback(): Promise<{
+  reason: PauseReason | null
+  text: string | null
+}> {
+  const [reason, text] = await Promise.all([
+    AsyncStorage.getItem(KEYS.FEEDBACK_REASON) as Promise<PauseReason | null>,
+    AsyncStorage.getItem(KEYS.FEEDBACK_TEXT),
+  ])
+  return { reason, text }
+}
+
+export async function clearFeedback(): Promise<void> {
+  await AsyncStorage.multiRemove([KEYS.FEEDBACK_REASON, KEYS.FEEDBACK_TEXT])
+}
+
+export async function setCompletedTask(task: Task): Promise<void> {
+  await AsyncStorage.setItem(KEYS.COMPLETED_TASK, JSON.stringify(task))
+}
+
+export async function getCompletedTask(): Promise<Task | null> {
+  const val = await AsyncStorage.getItem(KEYS.COMPLETED_TASK)
+  return val ? JSON.parse(val) : null
+}
+
+export async function clearCompletedTask(): Promise<void> {
+  await AsyncStorage.removeItem(KEYS.COMPLETED_TASK)
+}
+
+export async function getTasksCompletedCount(): Promise<number> {
+  const val = await AsyncStorage.getItem(KEYS.TASKS_COMPLETED_COUNT)
+  return val ? Number(val) : 0
+}
+
+export async function incrementTasksCompletedCount(): Promise<number> {
+  const current = await getTasksCompletedCount()
+  const next = current + 1
+  await AsyncStorage.setItem(KEYS.TASKS_COMPLETED_COUNT, String(next))
+  return next
+}
+
+export async function setTasksCompletedCount(count: number): Promise<void> {
+  await AsyncStorage.setItem(KEYS.TASKS_COMPLETED_COUNT, String(count))
+}
+
 export async function migrateGuestDataToSupabase(
   userId: string,
-  supabaseClient: any
+  supabaseClient: SupabaseClient
 ): Promise<void> {
   const [name, task, step, completedIds] = await Promise.all([
     getUserName(),
@@ -137,7 +220,7 @@ export async function migrateGuestDataToSupabase(
     }
 
     if (task && step) {
-      const { id: taskId, ...taskData } = task as any
+      const { id: taskId, ...taskData } = task as unknown as Record<string, unknown> & { steps?: Record<string, unknown>[] }
 
       const { data: newTask, error: taskError } = await supabaseClient
         .from("tasks")
@@ -148,14 +231,14 @@ export async function migrateGuestDataToSupabase(
       if (taskError) {
         errors.push(taskError)
       } else if (newTask) {
-        const stepsToInsert = taskData.steps?.map((s: any) => ({
+        const stepsToInsert = taskData.steps?.map((s) => ({
           task_id: newTask.id,
-          step_order: s.step_order,
-          title: s.title,
-          instruction: s.instruction,
-          estimated_minutes: s.estimated_minutes,
-          phase: s.phase ?? 1,
-          is_completed: completedIds.includes(s.id ?? String(s.step_order)),
+          step_order: Number(s.step_order),
+          title: String(s.title),
+          instruction: String(s.instruction),
+          estimated_minutes: Number(s.estimated_minutes),
+          phase: s.phase ? Number(s.phase) : 1,
+          is_completed: completedIds.includes(String(s.id ?? s.step_order)),
         })) ?? []
 
         if (stepsToInsert.length > 0) {
