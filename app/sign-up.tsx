@@ -23,17 +23,14 @@ export default function SignUp() {
     try {
       setIsSubmitting(true)
       setError("")
-      const user = await signInWithGoogle()
-      if (user) {
-        await migrateWithUser(user)
-      }
+      await signInWithGoogle()
       router.back()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : "Something went wrong. Please try again.")
     } finally {
       setIsSubmitting(false)
     }
-  }, [signInWithGoogle, migrateWithUser])
+  }, [signInWithGoogle])
 
   const handleEmailSignUp = useCallback(async () => {
     if (!email.trim() || !password.trim()) return
@@ -132,7 +129,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.xl,
     backgroundColor: theme.colors.background,
   },

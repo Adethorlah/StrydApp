@@ -1,3 +1,7 @@
+import { Platform } from "react-native"
+
+const isAndroid = Platform.OS === "android"
+
 export const theme = {
   colors: {
     primary: "hsl(239, 84%, 67%)",
@@ -53,16 +57,16 @@ export const theme = {
     title: {
       fontSize: 25,
       lineHeight: 37.5,
-      letterSpacing: -0.4,
+      letterSpacing: isAndroid ? -0.1 : -0.4,
     },
     body: {
-      large: { fontSize: 20, lineHeight: 30, letterSpacing: -0.2 },
-      medium: { fontSize: 16, lineHeight: 24, letterSpacing: -0.2 },
-      small: { fontSize: 14, lineHeight: 21, letterSpacing: -0.2 },
+      large: { fontSize: 20, lineHeight: 30, letterSpacing: isAndroid ? 0 : -0.2 },
+      medium: { fontSize: 16, lineHeight: 24, letterSpacing: isAndroid ? 0 : -0.2 },
+      small: { fontSize: 14, lineHeight: 21, letterSpacing: isAndroid ? 0 : -0.2 },
     },
     label: {
-      medium: { fontSize: 12, lineHeight: 18, letterSpacing: -0.1 },
-      small: { fontSize: 11, lineHeight: 16.5, letterSpacing: -0.1 },
+      medium: { fontSize: 12, lineHeight: 18, letterSpacing: isAndroid ? 0 : -0.1 },
+      small: { fontSize: 11, lineHeight: 16.5, letterSpacing: isAndroid ? 0 : -0.1 },
     },
   },
   spacing: {
@@ -71,6 +75,7 @@ export const theme = {
     md: 16,
     lg: 24,
     xl: 32,
+    xxl: 40,
   },
   radius: {
     sm: 4,

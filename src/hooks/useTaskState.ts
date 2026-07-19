@@ -17,6 +17,7 @@ export function useTaskState() {
   const [currentTask, setCurrentTaskState] = useState<Task | null>(null)
   const [currentStepIndex, setCurrentStepIndex] = useState(0)
   const [completedStepIds, setCompletedStepIdsState] = useState<string[]>([])
+  const [isLoading, setIsLoading] = useState(true)
 
   useEffect(() => {
     Promise.all([
@@ -32,6 +33,7 @@ export function useTaskState() {
         }
       }
       setCompletedStepIdsState(completed)
+      setIsLoading(false)
     })
   }, [])
 
@@ -61,6 +63,7 @@ export function useTaskState() {
   }, [currentTask, currentStepIndex])
 
   const reloadFromStorage = useCallback(async () => {
+    setIsLoading(true)
     const [task, step, completed] = await Promise.all([
       getCurrentTask(),
       getCurrentStep(),
@@ -77,6 +80,7 @@ export function useTaskState() {
       setCurrentStepIndex(0)
     }
     setCompletedStepIdsState(completed)
+    setIsLoading(false)
   }, [])
 
   const clearTask = useCallback(async () => {
@@ -144,5 +148,6 @@ export function useTaskState() {
     pauseTask,
     archiveTask,
     replaceStepWithSubSteps,
+    isLoading,
   }
 }

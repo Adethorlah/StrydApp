@@ -9,8 +9,9 @@ import { EmojiMoodPicker } from "../../src/components/EmojiMoodPicker"
 import { LoadingState } from "../../src/components/LoadingState"
 import { AiCompanion } from "../../src/components/AiCompanion"
 import { CompanionAvatar } from "../../src/components/CompanionAvatar"
-import { CompletedGoalCard } from "../../src/components/CompletedGoalCard"
-import { CompanionReflectionCard } from "../../src/components/CompanionReflectionCard"
+import { GuestLockSheet } from "../../src/components/GuestLockSheet"
+
+
 import { useOnboarding } from "../../src/hooks/useOnboarding"
 import { useMoodState } from "../../src/hooks/useMoodState"
 import { useTaskState } from "../../src/hooks/useTaskState"
@@ -44,10 +45,12 @@ export default function Home() {
     isTaskComplete,
     currentTask,
     currentStep,
+    currentStepIndex,
     completedStepIds,
     startNewTask,
     clearTask,
     reloadFromStorage,
+    isLoading: isTaskLoading,
   } = useTaskState()
   const { state: breakdownState, breakDown } = useBreakdownTask()
   const { isAuthenticated, signInWithGoogle } = useAuth()
@@ -59,6 +62,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null)
   const [showWelcome, setShowWelcome] = useState(false)
   const [showStepOverlay, setShowStepOverlay] = useState(false)
+  const [showGuestLockSheet, setShowGuestLockSheet] = useState(false)
   const [celebrationData, setCelebrationData] = useState<{
     task: Task
     completedStepIds: string[]
@@ -74,6 +78,9 @@ export default function Home() {
   useFocusEffect(
     useCallback(() => {
       reloadFromStorage()
+      return () => {
+        setShowStepOverlay(false)
+      }
     }, [reloadFromStorage])
   )
 
@@ -204,14 +211,26 @@ export default function Home() {
     [goal, startNewTask, breakDown, setMood]
   )
 
+  // TODO: Set back to 2 when sign-up is enabled
+  const FIRST_FREE_STEPS = Infinity
+
+  const isGuestLocked = !isAuthenticated && currentStepIndex >= FIRST_FREE_STEPS
+
   const handleContinue = useCallback(() => {
+    if (isGuestLocked) {
+      setShowGuestLockSheet(true)
+      return
+    }
     setShowStepOverlay(true)
-  }, [])
+  }, [isGuestLocked])
 
   const handleBeginStep = useCallback(() => {
-    setShowStepOverlay(false)
+    if (isGuestLocked) {
+      setShowGuestLockSheet(true)
+      return
+    }
     router.push("/focus-timer")
-  }, [])
+  }, [isGuestLocked])
 
   const handleStartNew = useCallback(async () => {
     await clearTask()
@@ -221,7 +240,7 @@ export default function Home() {
     setGoal("")
     setError(null)
     hasCapturedCelebration.current = false
-  }, [clearTask])
+  }, [clearTask, clearCompletedTask])
 
   const handleRest = useCallback(async () => {
     const twoHoursLater = new Date(Date.now() + 2 * 60 * 60 * 1000)
@@ -230,9 +249,13 @@ export default function Home() {
     setGoal("")
   }, [clearTask])
 
-  const handleViewCompletedJourney = useCallback(() => {
-    router.push("/(tabs)/journey?mode=review")
-  }, [])
+  const handleViewCompletedJourney = useCallback(async () => {
+    if (celebrationData) {
+      const { task, completedStepIds } = celebrationData
+      await setCompletedTask({ ...task, completedStepIds } as any)
+    }
+    router.push("/completed-journey")
+  }, [celebrationData])
 
   const getGreeting = (): string => {
     if (recency === "fresh") {
@@ -242,6 +265,17 @@ export default function Home() {
       return `Good to see you again, ${userName ?? "there"}.`
     }
     return `Welcome back, ${userName ?? "there"}.`
+  }
+
+  // Wait for local storage init before rendering anything to prevent flash of wrong state
+  if (isTaskLoading || hasCompletedFirstTask === null) {
+    return <View style={styles.container} />
+  }
+
+  // If task is complete but celebration data hasn't been captured yet, show loading state.
+  // This prevents a flash of the "Active Task" screen before the celebration screen appears.
+  if (hasActiveTask && isTaskComplete && !celebrationData) {
+    return <View style={styles.container} />
   }
 
   // State C — Goal Completed (celebration screen)
@@ -258,21 +292,11 @@ export default function Home() {
           </View>
 
           <Text style={styles.celebrationHeading}>
-            Congratulations, {userName ?? "there"}.
+            Congratulations!
           </Text>
           <Text style={styles.celebrationMessage}>
-            You worked through it. That's the whole thing.
+            Well done {userName ?? "there"}, every small step brought you{"\u00A0"}here.
           </Text>
-
-          <CompletedGoalCard
-            title={completedTask.title}
-            completedStepCount={completedIds.length}
-            totalStepCount={completedTask.steps.length}
-            createdAt={completedTask.created_at}
-            completedAt={Date.now().toString()}
-          />
-
-          <CompanionReflectionCard />
 
           <Button
             title="Start something new"
@@ -343,6 +367,11 @@ export default function Home() {
             </Animated.View>
           </TouchableOpacity>
         </Modal>
+
+        <GuestLockSheet
+          visible={showGuestLockSheet}
+          onDismiss={() => setShowGuestLockSheet(false)}
+        />
       </View>
     )
   }
@@ -422,7 +451,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.xl,
     backgroundColor: theme.colors.background,
   },
@@ -433,15 +462,13 @@ const styles = StyleSheet.create({
   scrollContent: {
     flexGrow: 1,
     justifyContent: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.lg,
     paddingBottom: theme.spacing.xl,
   },
   celebrationScroll: {
     flexGrow: 1,
-    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: theme.spacing.xl,
-    gap: theme.spacing.lg,
   },
   greeting: {
     fontFamily: theme.typography.fontFamily,
@@ -463,7 +490,6 @@ const styles = StyleSheet.create({
   },
   avatarContainer: {
     alignItems: "center",
-    marginBottom: theme.spacing.md,
   },
   promptText: {
     fontFamily: theme.typography.fontFamily,
@@ -483,14 +509,14 @@ const styles = StyleSheet.create({
     color: theme.colors.onBackground,
     textAlign: "center",
     marginBottom: theme.spacing.lg,
-    paddingHorizontal: 48,
+    paddingHorizontal: theme.spacing.lg,
   },
   input: {
     width: "100%",
   },
   actionButton: {
     width: "100%",
-    marginTop: 48,
+    marginTop: theme.spacing.xl,
   },
   secondaryButton: {
     width: "100%",
@@ -578,6 +604,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.weight.semibold,
     color: theme.colors.onSurface,
     textAlign: "center",
+    marginTop: theme.spacing.md,
   },
   celebrationMessage: {
     fontFamily: theme.typography.fontFamily,
@@ -585,17 +612,18 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.body.large.lineHeight,
     color: theme.colors.onSurfaceVariant,
     textAlign: "center",
-    paddingHorizontal: theme.spacing.lg,
-    marginBottom: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
   },
   viewJourneyButton: {
+    alignSelf: "center",
+    marginTop: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
   },
   viewJourneyText: {
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.body.small.fontSize,
-    color: theme.colors.onSurfaceVariant,
+    color: theme.colors.secondary,
     fontWeight: theme.typography.weight.medium,
     textDecorationLine: "underline",
   },

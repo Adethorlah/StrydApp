@@ -57,7 +57,7 @@ export function StepNode({
   onDismiss,
   onBegin,
 }: StepNodeProps) {
-  const { signInWithGoogle, signUpWithEmail, signInWithEmail, migrateWithUser } = useAuth()
+  const { signInWithGoogle, signUpWithEmail, signInWithEmail, migrateWithUser, isGoogleAuthEnabled, isEmailAuthEnabled } = useAuth()
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current
   const pulseAnim = useRef(new Animated.Value(1)).current
   const [signUpEmail, setSignUpEmail] = useState("")
@@ -135,8 +135,10 @@ export function StepNode({
       setIsEmailSubmitting(true)
       await signInWithGoogle()
       onDismiss()
-    } catch {
-      setEmailError("Sign in was cancelled or failed.")
+    } catch (e) {
+      const message = e instanceof Error ? e.message : "Sign in was cancelled or failed."
+      console.warn("[GoogleSignIn]", message)
+      setEmailError(message)
     } finally {
       setIsEmailSubmitting(false)
     }
@@ -230,53 +232,61 @@ export function StepNode({
                     Sign up to continue your journey and unlock all steps.
                   </Text>
 
-                  <TouchableOpacity
-                    style={styles.googleButton}
-                    onPress={handleGoogleSignIn}
-                    activeOpacity={0.85}
-                    disabled={isEmailSubmitting}
-                  >
-                    <Text style={styles.googleButtonText}>
-                      {isEmailSubmitting ? "Signing in..." : "Continue with Google"}
-                    </Text>
-                  </TouchableOpacity>
+                  {isGoogleAuthEnabled && (
+                    <>
+                      <TouchableOpacity
+                        style={styles.googleButton}
+                        onPress={handleGoogleSignIn}
+                        activeOpacity={0.85}
+                        disabled={isEmailSubmitting}
+                      >
+                        <Text style={styles.googleButtonText}>
+                          {isEmailSubmitting ? "Signing in..." : "Continue with Google"}
+                        </Text>
+                      </TouchableOpacity>
 
-                  <View style={styles.orDivider}>
-                    <View style={styles.orLine} />
-                    <Text style={styles.orText}>or</Text>
-                    <View style={styles.orLine} />
-                  </View>
+                      <View style={styles.orDivider}>
+                        <View style={styles.orLine} />
+                        <Text style={styles.orText}>or</Text>
+                        <View style={styles.orLine} />
+                      </View>
+                    </>
+                  )}
 
-                  <TextInput
-                    style={styles.emailInput}
-                    placeholder="Enter your email"
-                    placeholderTextColor={theme.colors.onSurfaceVariant}
-                    value={signUpEmail}
-                    onChangeText={setSignUpEmail}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    onFocus={() => setIsKeyboardActive(true)}
-                    onBlur={() => setIsKeyboardActive(false)}
-                    editable={!isEmailSubmitting}
-                  />
+                  {isEmailAuthEnabled && (
+                    <>
+                      <TextInput
+                        style={styles.emailInput}
+                        placeholder="Enter your email"
+                        placeholderTextColor={theme.colors.onSurfaceVariant}
+                        value={signUpEmail}
+                        onChangeText={setSignUpEmail}
+                        keyboardType="email-address"
+                        autoCapitalize="none"
+                        onFocus={() => setIsKeyboardActive(true)}
+                        onBlur={() => setIsKeyboardActive(false)}
+                        editable={!isEmailSubmitting}
+                      />
 
-                  {emailError ? (
-                    <Text style={styles.emailErrorText}>{emailError}</Text>
-                  ) : null}
+                      {emailError ? (
+                        <Text style={styles.emailErrorText}>{emailError}</Text>
+                      ) : null}
 
-                  <TouchableOpacity
-                    style={[
-                      styles.signUpButton,
-                      (!canSignUpEmail || isEmailSubmitting) && styles.signUpButtonDisabled,
-                    ]}
-                    onPress={handleEmailSignUp}
-                    activeOpacity={0.85}
-                    disabled={!canSignUpEmail || isEmailSubmitting}
-                  >
-                    <Text style={styles.signUpButtonText}>
-                      {isEmailSubmitting ? "Creating account..." : "Sign up"}
-                    </Text>
-                  </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[
+                          styles.signUpButton,
+                          (!canSignUpEmail || isEmailSubmitting) && styles.signUpButtonDisabled,
+                        ]}
+                        onPress={handleEmailSignUp}
+                        activeOpacity={0.85}
+                        disabled={!canSignUpEmail || isEmailSubmitting}
+                      >
+                        <Text style={styles.signUpButtonText}>
+                          {isEmailSubmitting ? "Creating account..." : "Sign up"}
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
 
                   <View style={{ height: 40 }} />
                 </ScrollView>

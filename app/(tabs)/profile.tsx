@@ -244,7 +244,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.title.fontSize,
     fontWeight: theme.typography.weight.semibold,
     color: theme.colors.onBackground,
-    marginBottom: 2,
+    marginBottom: theme.spacing.xs,
   },
   emailText: {
     fontFamily: theme.typography.fontFamily,
@@ -254,7 +254,6 @@ const styles = StyleSheet.create({
 
   workingOnRow: {
     alignItems: "center",
-    marginTop: -theme.spacing.sm,
     marginBottom: theme.spacing.lg,
   },
   workingOnLabel: {
@@ -263,7 +262,7 @@ const styles = StyleSheet.create({
     color: theme.colors.onSurfaceVariant,
     textTransform: "uppercase",
     letterSpacing: 0.8,
-    marginBottom: 2,
+    marginBottom: theme.spacing.xs,
   },
   workingOnTitle: {
     fontFamily: theme.typography.fontFamily,

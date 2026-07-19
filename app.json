@@ -1,7 +1,7 @@
 {
   "expo": {
-"name": "Stryd",
-"slug": "Stryd",
+    "name": "Stryd",
+    "slug": "Stryd",
     "scheme": "strydapp",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -28,7 +28,23 @@
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router"
-    ]
+      "expo-router",
+      "expo-font",
+      "expo-secure-store",
+      "expo-web-browser"
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "798efd49-777b-4f0e-af94-42b1ba4e44ba"
+      }
+    },
+    "owner": "dethorlah01",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/798efd49-777b-4f0e-af94-42b1ba4e44ba"
+    }
   }
 }

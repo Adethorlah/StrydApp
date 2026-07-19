@@ -47,15 +47,15 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: theme.spacing.xl * 2,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
   },
   overlayContent: {
     width: "100%",
     alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.65)",
     borderRadius: theme.radius.xl,
-    padding: theme.spacing.md,
+    padding: theme.spacing.lg,
   },
   title: {
     fontFamily: theme.typography.fontFamily,

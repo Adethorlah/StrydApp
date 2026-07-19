@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react"
-import { View, Animated } from "react-native"
+import { View, Animated, Platform } from "react-native"
 import { SvgXml } from "react-native-svg"
 import { MASCOT_SVG } from "../assets/images/mascot"
 
@@ -39,11 +39,14 @@ export function CompanionAvatar({ size = 72 }: CompanionAvatarProps) {
           height: size,
           borderRadius: size / 2,
           backgroundColor: "transparent",
-          shadowColor: "#6366F1",
-          shadowOffset: { width: 0, height: 4 },
-          shadowOpacity: 0.35,
-          shadowRadius: 8,
-          elevation: 8,
+          ...(Platform.OS === "ios" ? {
+            shadowColor: "#6366F1",
+            shadowOffset: { width: 0, height: 4 },
+            shadowOpacity: 0.35,
+            shadowRadius: 8,
+          } : {
+            elevation: 8,
+          }),
         }}
       >
         <SvgXml xml={MASCOT_SVG} width={size} height={size} />

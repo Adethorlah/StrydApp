@@ -1,15 +1,14 @@
 import { useState } from "react"
-import { View, Text, StyleSheet, Platform, StatusBar, TouchableOpacity, KeyboardAvoidingView } from "react-native"
+import { View, Text, StyleSheet, Platform, TouchableOpacity, KeyboardAvoidingView } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { router } from "expo-router"
 import { theme } from "../../src/theme/tokens"
 import { StyledInput } from "../../src/components/TextInput"
 import { Button } from "../../src/components/Button"
 import { ChevronLeft } from "../../src/components/icons"
 
-const STATUS_BAR_HEIGHT =
-  Platform.OS === "android" ? StatusBar.currentHeight ?? 48 : 60
-
 export default function NameInput() {
+  const insets = useSafeAreaInsets()
   const [name, setName] = useState("")
   const [isFocused, setIsFocused] = useState(false)
 
@@ -24,9 +23,9 @@ export default function NameInput() {
   return (
     <KeyboardAvoidingView
       style={styles.outer}
-      behavior={Platform.OS === "ios" ? "padding" : "height"}
+      behavior={Platform.OS === "ios" ? "padding" : undefined}
     >
-      <View style={styles.container}>
+      <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
 
         {/* Top nav */}
         <View style={styles.topRow}>
@@ -95,7 +94,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: STATUS_BAR_HEIGHT + 16,
   },
   topRow: {
     flexDirection: "row",
@@ -103,14 +101,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
   },
   backButton: {
-    marginRight: 16,
+    marginRight: theme.spacing.md,
   },
   wordmark: {
     fontFamily: theme.typography.fontFamily,
     fontSize: 22,
     fontWeight: "700",
     color: theme.colors.onBackground,
-    letterSpacing: -0.5,
   },
   progressSection: {
     gap: theme.spacing.sm,
@@ -138,7 +135,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-start",
     paddingTop: theme.spacing.xl,
-    gap: theme.spacing.lg,
+    gap: theme.spacing.sm,
   },
   title: {
     fontFamily: theme.typography.fontFamily,
@@ -151,7 +148,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.body.medium.fontSize,
     color: theme.colors.onSurfaceVariant,
-    marginTop: -theme.spacing.sm,
   },
   inputWrapper: {
     borderWidth: 1.5,
@@ -170,6 +166,6 @@ const styles = StyleSheet.create({
   },
   button: {
     width: "100%",
-    marginTop: theme.spacing.sm,
+    marginTop: theme.spacing.lg,
   },
 })

@@ -94,7 +94,8 @@ export function JourneyPath({
   const completedCount = completedStepIds.length
   const totalCount = steps.length
 
-  const FIRST_FREE_STEPS = 2
+  // TODO: Set back to 2 when sign-up is enabled
+  const FIRST_FREE_STEPS = Infinity
   let lastPhase = 0
 
   return (

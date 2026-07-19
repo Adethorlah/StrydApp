@@ -1,19 +1,31 @@
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react"
+import { createContext, useContext, useState, useEffect, useCallback, useRef, ReactNode } from "react"
 import { supabase } from "../services/supabase.service"
 import { migrateGuestDataToSupabase } from "../lib/storage"
 import { getOrCreateProfile } from "../services/users.service"
-import * as Linking from "expo-linking"
+import * as Google from "expo-auth-session/providers/google"
 import * as WebBrowser from "expo-web-browser"
+import { makeRedirectUri } from "expo-auth-session"
 import { Session, User } from "@supabase/supabase-js"
 
 WebBrowser.maybeCompleteAuthSession()
+
+const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? ""
+const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? ""
+
+// Set to true to enable Google sign-in (requires valid client IDs in Google Cloud Console)
+const GOOGLE_AUTH_ENABLED = false
+
+// Set to true to enable email sign-up/sign-in
+const EMAIL_AUTH_ENABLED = false
 
 interface AuthContextType {
   user: User | null
   session: Session | null
   isLoading: boolean
   isAuthenticated: boolean
-  signInWithGoogle: () => Promise<User>
+  isGoogleAuthEnabled: boolean
+  isEmailAuthEnabled: boolean
+  signInWithGoogle: () => Promise<void>
   signInWithEmail: (email: string, password: string) => Promise<User | null>
   signUpWithEmail: (email: string, password: string) => Promise<any>
   signOut: () => Promise<void>
@@ -23,37 +35,31 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
-// Linking.createURL generates the correct exp:// URL for Expo Go
-const redirectTo = Linking.createURL("")
-
-// Log during development so we can verify the redirect URI
-console.log("[Auth] Redirect URI:", redirectTo)
-
-function extractSessionParams(url: string): { access_token: string; refresh_token: string } | null {
-  const parsedUrl = new URL(url)
-  // Supabase puts tokens in the URL fragment (hash)
-  const fragment = parsedUrl.hash.substring(1)
-  const params = new URLSearchParams(fragment)
-
-  // Also check query params as a fallback
-  const accessToken = params.get("access_token") || parsedUrl.searchParams.get("access_token")
-  const refreshToken = params.get("refresh_token") || parsedUrl.searchParams.get("refresh_token")
-
-  if (accessToken && refreshToken) {
-    return { access_token: accessToken, refresh_token: refreshToken }
-  }
-  return null
-}
-
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null)
   const [session, setSession] = useState<Session | null>(null)
   const [isLoading, setIsLoading] = useState(true)
+  const hasAutoMigrated = useRef(false)
 
+  // Google auth via expo-auth-session: gets id_token directly, no redirect needed
+  const redirectUri = makeRedirectUri({
+    scheme: "strydapp",
+    path: "redirect",
+  })
+
+  const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
+    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
+    webClientId: GOOGLE_WEB_CLIENT_ID,
+    redirectUri,
+  })
+
+  // Initialize session on mount
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session)
-      setUser(session?.user ?? null)
+    supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
+      if (currentSession) {
+        setSession(currentSession)
+        setUser(currentSession.user ?? null)
+      }
       setIsLoading(false)
     }).catch(() => {
       setIsLoading(false)
@@ -69,51 +75,57 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  const signInWithGoogle = useCallback(async () => {
-    const { data, error } = await supabase.auth.signInWithOAuth({
+  // Handle Google auth response: pass id_token to Supabase
+  useEffect(() => {
+    if (googleResponse?.type !== "success") return
+
+    const idToken = googleResponse.params?.id_token
+    if (!idToken) {
+      console.error("[Auth] Google auth succeeded but no id_token returned")
+      return
+    }
+
+    supabase.auth.signInWithIdToken({
       provider: "google",
-      options: {
-        redirectTo,
-        skipBrowserRedirect: true,
-      },
+      token: idToken,
+    }).then(({ error }) => {
+      if (error) {
+        console.error("[Auth] signInWithIdToken error:", error.message)
+      }
+    }).catch((err) => {
+      console.error("[Auth] signInWithIdToken failed:", err)
     })
+  }, [googleResponse])
 
-    if (error) throw error
-    if (!data?.url) throw new Error("No OAuth URL returned")
-
-    const result = await WebBrowser.openAuthSessionAsync(data.url, redirectTo)
-
-    if (result.type !== "success" || !result.url) {
-      throw new Error("Sign in was cancelled")
+  // Auto-migrate guest data when user transitions from null to non-null
+  useEffect(() => {
+    if (user && !hasAutoMigrated.current) {
+      hasAutoMigrated.current = true
+      migrateGuestDataToSupabase(user.id, supabase)
+        .then(() => getOrCreateProfile(user.id, user.email ?? undefined))
+        .catch((err) => console.warn("[Auth] Auto-migration failed:", err))
     }
+  }, [user])
 
-    // Extract tokens from the redirect URL
-    const sessionParams = extractSessionParams(result.url)
-    if (!sessionParams) {
-      throw new Error("No session tokens found in redirect URL")
+  const signInWithGoogle = useCallback(async () => {
+    if (!GOOGLE_AUTH_ENABLED) {
+      throw new Error("Google sign-in is not enabled yet.")
     }
-
-    // Explicitly set the session with the extracted tokens
-    const { data: sessionData, error: sessionError } = await supabase.auth.setSession({
-      access_token: sessionParams.access_token,
-      refresh_token: sessionParams.refresh_token,
-    })
-
-    if (sessionError) throw sessionError
-    if (!sessionData.user) throw new Error("Session established but no user returned")
-
-    return sessionData.user
-  }, [])
+    if (!googleRequest) {
+      throw new Error("Google auth not ready. Please try again.")
+    }
+    await googlePromptAsync()
+  }, [googleRequest, googlePromptAsync])
 
   const signInWithEmail = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
-    const user = data.session?.user ?? null
-    if (user) {
-      setUser(user)
+    const u = data.session?.user ?? null
+    if (u) {
+      setUser(u)
       setSession(data.session)
     }
-    return user
+    return u
   }, [])
 
   const signUpWithEmail = useCallback(async (email: string, password: string) => {
@@ -143,6 +155,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       isLoading,
       isAuthenticated: !!user,
+      isGoogleAuthEnabled: GOOGLE_AUTH_ENABLED,
+      isEmailAuthEnabled: EMAIL_AUTH_ENABLED,
       signInWithGoogle,
       signInWithEmail,
       signUpWithEmail,

@@ -1,4 +1,5 @@
 import { View, Text, StyleSheet, TouchableOpacity } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { router } from "expo-router"
 import { theme } from "../../src/theme/tokens"
 import { Button } from "../../src/components/Button"
@@ -6,13 +7,15 @@ import { OnboardIllustration } from "../../src/components/icons/OnboardIllustrat
 import { setOnboardingComplete } from "../../src/lib/storage"
 
 export default function Welcome2() {
+  const insets = useSafeAreaInsets()
+
   return (
     <View style={styles.container}>
       <View style={styles.backgroundFill}>
         <OnboardIllustration />
       </View>
       <TouchableOpacity
-        style={styles.skip}
+        style={[styles.skip, { top: insets.top + 8 }]}
         onPress={async () => {
           await setOnboardingComplete()
           router.replace("/(tabs)/home")
@@ -57,15 +60,15 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "flex-end",
     alignItems: "center",
-    paddingHorizontal: 24,
-    paddingBottom: theme.spacing.xl * 2,
+    paddingHorizontal: theme.spacing.lg,
+    paddingBottom: theme.spacing.xxl,
   },
   overlayContent: {
     width: "100%",
     alignItems: "center",
     backgroundColor: "rgba(255,255,255,0.65)",
     borderRadius: theme.radius.xl,
-    padding: theme.spacing.md,
+    padding: theme.spacing.lg,
   },
   title: {
     fontFamily: theme.typography.fontFamily,
@@ -88,7 +91,6 @@ const styles = StyleSheet.create({
   },
   skip: {
     position: "absolute",
-    top: 50,
     right: 24,
     zIndex: 10,
   },

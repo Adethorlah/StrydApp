@@ -12,6 +12,7 @@ import {
   Platform,
 } from "react-native"
 import { useSafeAreaInsets } from "react-native-safe-area-context"
+import { StatusBar } from "expo-status-bar"
 import { router } from "expo-router"
 import { LinearGradient } from "expo-linear-gradient"
 import { theme } from "../src/theme/tokens"
@@ -99,6 +100,7 @@ export default function FocusTimer() {
     currentStepIndex,
     completedStepIds,
     completeStepAndAdvance,
+    isLoading: isTaskLoading,
   } = useTaskState()
 
   const { messages, isLoading, sendMessage, initWithGreeting } = useChat()
@@ -175,12 +177,24 @@ export default function FocusTimer() {
     }, 1800)
   }, [completeStepAndAdvance, currentTask, currentStepIndex])
 
+  if (isTaskLoading) {
+    return (
+      <LinearGradient
+        colors={["hsl(240, 50%, 12%)", "hsl(239, 60%, 18%)", "hsl(250, 40%, 22%)"]}
+        style={focusStyles.container}
+      >
+        <StatusBar style="light" />
+      </LinearGradient>
+    )
+  }
+
   if (!currentStep) {
     return (
       <LinearGradient
         colors={["hsl(240, 50%, 12%)", "hsl(239, 60%, 18%)", "hsl(250, 40%, 22%)"]}
         style={focusStyles.container}
       >
+        <StatusBar style="light" />
         <View style={focusStyles.inner}>
           <Text style={[focusStyles.stepWorking, { color: "#fff" }]}>No active step</Text>
         </View>
@@ -199,6 +213,7 @@ export default function FocusTimer() {
       start={{ x: 0, y: 0 }}
       end={{ x: 0.3, y: 1 }}
     >
+      <StatusBar style="light" />
       <View
         style={[
           focusStyles.inner,
@@ -295,7 +310,7 @@ export default function FocusTimer() {
                 <ScrollView
                   ref={scrollRef}
                   style={focusStyles.chatScroll}
-                  contentContainerStyle={{ gap: 10, paddingVertical: 8 }}
+                  contentContainerStyle={{ gap: theme.spacing.sm, paddingVertical: theme.spacing.sm }}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                 >
@@ -365,11 +380,10 @@ const focusStyles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
     justifyContent: "center",
-    gap: theme.spacing.lg,
+    gap: theme.spacing.xl,
   },
   avatarSection: {
     alignItems: "center",
-    marginBottom: theme.spacing.md,
   },
   avatarGlow: {
     backgroundColor: "rgba(255,255,255,0.08)",
@@ -426,7 +440,7 @@ const focusStyles = StyleSheet.create({
   },
   actions: {
     alignItems: "center",
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
     paddingBottom: theme.spacing.sm,
   },
   doneButton: {

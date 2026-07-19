@@ -306,7 +306,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    paddingHorizontal: 24,
+    paddingHorizontal: theme.spacing.lg,
     paddingVertical: theme.spacing.xl,
     backgroundColor: theme.colors.background,
   },

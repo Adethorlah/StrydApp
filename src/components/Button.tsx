@@ -1,4 +1,4 @@
-import { TouchableOpacity, Text, StyleSheet, ViewStyle } from "react-native"
+import { TouchableOpacity, Text, StyleSheet, ViewStyle, Platform } from "react-native"
 import { theme } from "../theme/tokens"
 
 interface ButtonProps {
@@ -51,11 +51,14 @@ const styles = StyleSheet.create({
   },
   primary: {
     backgroundColor: theme.colors.primary,
-    shadowColor: theme.colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 4,
+    ...(Platform.OS === "ios" ? {
+      shadowColor: theme.colors.primary,
+      shadowOffset: { width: 0, height: 4 },
+      shadowOpacity: 0.3,
+      shadowRadius: 8,
+    } : {
+      elevation: 4,
+    }),
   },
   secondary: {
     backgroundColor: theme.colors.secondaryContainer,

@@ -1,15 +1,14 @@
 import { useCallback } from "react"
-import { View, Text, StyleSheet, Platform, StatusBar, TouchableOpacity } from "react-native"
+import { View, Text, StyleSheet, TouchableOpacity } from "react-native"
+import { useSafeAreaInsets } from "react-native-safe-area-context"
 import { router, useLocalSearchParams } from "expo-router"
 import { theme } from "../../src/theme/tokens"
 import { EmojiMoodPicker } from "../../src/components/EmojiMoodPicker"
 import { ChevronLeft } from "../../src/components/icons"
 import { setUserName, setSessionMood, setOnboardingComplete } from "../../src/lib/storage"
 
-const STATUS_BAR_HEIGHT =
-  Platform.OS === "android" ? StatusBar.currentHeight ?? 48 : 60
-
 export default function MoodCheck() {
+  const insets = useSafeAreaInsets()
   const { name } = useLocalSearchParams<{ name: string }>()
 
   const handleMoodSelect = useCallback(
@@ -23,7 +22,7 @@ export default function MoodCheck() {
   )
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: insets.top + 16 }]}>
       <View style={styles.topRow}>
         <TouchableOpacity onPress={() => router.replace("/(onboarding)/name-input")} style={styles.backButton}>
           <ChevronLeft color={theme.colors.onBackground} size={24} />
@@ -54,7 +53,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     paddingHorizontal: theme.spacing.lg,
-    paddingTop: STATUS_BAR_HEIGHT + 16,
     backgroundColor: theme.colors.background,
   },
   topRow: {
@@ -63,14 +61,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
   },
   backButton: {
-    marginRight: 16,
+    marginRight: theme.spacing.md,
   },
   wordmark: {
     fontFamily: theme.typography.fontFamily,
     fontSize: 22,
     fontWeight: "700",
     color: theme.colors.onBackground,
-    letterSpacing: -0.5,
   },
   progressSection: {
     gap: theme.spacing.sm,
@@ -96,7 +93,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    gap: theme.spacing.lg,
+    gap: theme.spacing.sm,
     paddingTop: theme.spacing.xl,
   },
   title: {
@@ -110,10 +107,9 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily,
     fontSize: theme.typography.body.medium.fontSize,
     color: theme.colors.onSurfaceVariant,
-    marginTop: -theme.spacing.sm,
   },
   moodRow: {
     alignItems: "center",
-    paddingTop: theme.spacing.sm,
+    paddingTop: theme.spacing.lg,
   },
 })
