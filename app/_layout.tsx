@@ -10,9 +10,9 @@ import { AuthProvider } from "../src/contexts/AuthContext"
 const queryClient = new QueryClient()
 
 export default function RootLayout() {
-  const { fontsLoaded } = useAppFonts()
+  const { fontsLoaded, fontsError } = useAppFonts()
 
-  if (!fontsLoaded) {
+  if (!fontsLoaded && !fontsError) {
     return (
       <View style={styles.splash}>
         <Text style={styles.splashText}>STRYD</Text>
