@@ -54,7 +54,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
   },
   splashText: {
-    fontFamily: "Outfit",
     fontSize: 32,
     fontWeight: "600",
     letterSpacing: 4,

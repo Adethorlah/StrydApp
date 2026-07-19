@@ -2,20 +2,8 @@ import { createContext, useContext, useState, useEffect, useCallback, useRef, Re
 import { supabase } from "../services/supabase.service"
 import { migrateGuestDataToSupabase } from "../lib/storage"
 import { getOrCreateProfile } from "../services/users.service"
-import * as Google from "expo-auth-session/providers/google"
-import * as WebBrowser from "expo-web-browser"
-import { makeRedirectUri } from "expo-auth-session"
 import { Session, User } from "@supabase/supabase-js"
 
-WebBrowser.maybeCompleteAuthSession()
-
-const GOOGLE_WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? ""
-const GOOGLE_ANDROID_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID ?? ""
-
-// Set to true to enable Google sign-in (requires valid client IDs in Google Cloud Console)
-const GOOGLE_AUTH_ENABLED = false
-
-// Set to true to enable email sign-up/sign-in
 const EMAIL_AUTH_ENABLED = false
 
 interface AuthContextType {
@@ -41,19 +29,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true)
   const hasAutoMigrated = useRef(false)
 
-  // Google auth via expo-auth-session: gets id_token directly, no redirect needed
-  const redirectUri = makeRedirectUri({
-    scheme: "strydapp",
-    path: "redirect",
-  })
-
-  const [googleRequest, googleResponse, googlePromptAsync] = Google.useIdTokenAuthRequest({
-    androidClientId: GOOGLE_ANDROID_CLIENT_ID,
-    webClientId: GOOGLE_WEB_CLIENT_ID,
-    redirectUri,
-  })
-
-  // Initialize session on mount
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session: currentSession } }) => {
       if (currentSession) {
@@ -75,29 +50,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [])
 
-  // Handle Google auth response: pass id_token to Supabase
-  useEffect(() => {
-    if (googleResponse?.type !== "success") return
-
-    const idToken = googleResponse.params?.id_token
-    if (!idToken) {
-      console.error("[Auth] Google auth succeeded but no id_token returned")
-      return
-    }
-
-    supabase.auth.signInWithIdToken({
-      provider: "google",
-      token: idToken,
-    }).then(({ error }) => {
-      if (error) {
-        console.error("[Auth] signInWithIdToken error:", error.message)
-      }
-    }).catch((err) => {
-      console.error("[Auth] signInWithIdToken failed:", err)
-    })
-  }, [googleResponse])
-
-  // Auto-migrate guest data when user transitions from null to non-null
   useEffect(() => {
     if (user && !hasAutoMigrated.current) {
       hasAutoMigrated.current = true
@@ -108,14 +60,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [user])
 
   const signInWithGoogle = useCallback(async () => {
-    if (!GOOGLE_AUTH_ENABLED) {
-      throw new Error("Google sign-in is not enabled yet.")
-    }
-    if (!googleRequest) {
-      throw new Error("Google auth not ready. Please try again.")
-    }
-    await googlePromptAsync()
-  }, [googleRequest, googlePromptAsync])
+    throw new Error("Google sign-in is not enabled yet.")
+  }, [])
 
   const signInWithEmail = useCallback(async (email: string, password: string) => {
     const { data, error } = await supabase.auth.signInWithPassword({ email, password })
@@ -155,7 +101,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       session,
       isLoading,
       isAuthenticated: !!user,
-      isGoogleAuthEnabled: GOOGLE_AUTH_ENABLED,
+      isGoogleAuthEnabled: false,
       isEmailAuthEnabled: EMAIL_AUTH_ENABLED,
       signInWithGoogle,
       signInWithEmail,
